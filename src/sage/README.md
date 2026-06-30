@@ -1,0 +1,156 @@
+# SageSMP - Pure Sage Multicore Protocol
+
+A modular, mailbox-based protocol for multicore message passing implemented in pure SageLang.
+
+## Overview
+
+SageSMP provides a distributed messaging system inspired by Erlang-style mailboxes, designed for multi-node communication. It handles node discovery, message routing, and reliable delivery across a network of Sage nodes.
+
+## Module Structure
+
+```
+src/sage/
+├── __init__.sage      # Core definitions, constants, version
+├── mailbox.sage       # Mailbox system for message queuing and delivery
+├── smp_protocol.sage  # Protocol message types and encoding
+├── node.sage          # Node identity, registry, and lifecycle management
+├── transport.sage     # Network transport layer (TCP framing)
+├── client.sage        # Client implementation for connecting to servers
+├── server.sage        # Server implementation for accepting connections
+├── crypto.sage        # Message signing and encryption utilities
+├── rtos.sage          # Pure-Sage RTOS scheduler for task management
+└── example.sage       # Usage examples and test suite
+```
+
+## Quick Start
+
+### Creating a Client
+
+```sage
+import smp.client
+
+let client = smp_client.Client("my-node", "127.0.0.1", 42000)
+
+# Connect to server
+client.connect("127.0.0.1", 42000)
+
+# Register message handler
+client.on("1", proc(msg):
+    print "Received: " + str(msg["payload"])
+)
+
+# Send a message to another node
+let seq = client.send(2, {"data": "Hello, node 2!"})
+
+# Run event loop
+client.run()
+```
+
+### Creating a Server
+
+```sage
+import smp.server
+
+let server = smp_server.Server("cluster-master", "0.0.0.0", 42000)
+
+# Register event handlers
+server.on("message", proc(sender, target, payload):
+    print "Message from " + str(sender) + " to " + str(target)
+)
+
+# Start accepting connections
+server.start()
+```
+
+## Protocol Opcodes
+
+| Opcode | Name | Description |
+|--------|------|-------------|
+| 0 | HEARTBEAT | Keep-alive ping |
+| 1 | MESSAGE | Data message between nodes |
+| 2 | JOIN | Node join notification |
+| 3 | LEAVE | Node leave notification |
+| 4 | MAILBOX | Direct mailbox transfer |
+| 5 | MAILBOX_ACK | Mailbox operation acknowledgment |
+| 6 | SYNC | State synchronization |
+| 7 | SYNC_ACK | Sync acknowledgment |
+| 8 | BROADCAST | Broadcast to all nodes |
+| 9 | NODE_INFO | Node metadata exchange |
+
+## Mailbox System
+
+The mailbox system provides FIFO message queues with optional capacity limits:
+
+```sage
+import smp.mailbox
+
+# Create mailbox with 100 message capacity
+let mbox = smp_mailbox.create_mailbox(node_id, 100)
+
+# Send messages
+let msg = smp_mailbox.create_message(sender, recipient, MSG_TYPE_DATA, payload)
+let seq = smp_mailbox.send(mbox, msg)
+
+# Receive messages
+let received = smp_mailbox.recv(mbox)
+
+# Register handlers for automatic processing
+smp_mailbox.on_mail(mbox, MSG_TYPE_DATA, proc(msg):
+    # Handle message
+)
+```
+
+## Node States
+
+- `NODE_STATE_DISCONNECTED` (0) - Node not connected
+- `NODE_STATE_CONNECTING` (1) - Connection in progress
+- `NODE_STATE_CONNECTED` (2) - TCP connected
+- `NODE_STATE_READY` (3) - Ready for messaging
+- `NODE_STATE_ERROR` (4) - Error state
+
+## Running Tests
+
+```bash
+sage src/sage/example.sage
+```
+
+Or from Sage code:
+```sage
+import smp.example
+smp_example.run_all()
+```
+
+## Configuration
+
+Environment variables:
+- `SMP_HOST` - Default host (default: 127.0.0.1)
+- `SMP_PORT` - Default port (default: 42000)
+
+Defaults can be overridden in code:
+- `DEFAULT_HOST`
+- `DEFAULT_PORT`
+- `DEFAULT_TIMEOUT_MS` (5000)
+- `DEFAULT_MAX_NODES` (64)
+- `DEFAULT_MAILBOX_SIZE` (1024)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              Application Layer               │
+├─────────────────────────────────────────────┤
+│         Client/Server (smp.client)          │
+├─────────────────────────────────────────────┤
+│          Transport (smp.transport)          │
+├─────────────────────────────────────────────┤
+│           Protocol (smp.smp_protocol)       │
+├─────────────────────────────────────────────┤
+│           Mailbox (smp.mailbox)            │
+├─────────────────────────────────────────────┤
+│             Crypto (smp.crypto)             │
+└─────────────────────────────────────────────┘
+```
+
+## License
+
+MIT
