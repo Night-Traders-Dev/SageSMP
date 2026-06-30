@@ -1,6 +1,6 @@
 # SMP RTOS Scheduler
 # ==================
-# Pure-Sage preemptive task scheduler for SMP
+# Pure-Sage preemptive task scheduler for SMP with GC-aware scheduling
 
 gc_disable()
 
@@ -11,6 +11,7 @@ gc_disable()
 let RTOS_MAX_TASKS = 16
 let RTOS_MAX_PRIORITY = 8
 let RTOS_STACK_SIZE = 4096
+let RTOS_GC_INTERVAL = 100  # Run GC every N ticks
 
 # ============================================================================
 # Task States
@@ -31,6 +32,35 @@ let rtos_task_count = 0
 let rtos_current_task = 0
 let rtos_tick_count = 0
 let rtos_running = false
+let rtos_gc_ticks = 0  # Tick counter for GC scheduling
+
+# ============================================================================
+# Memory Pool for RTOS (GC-friendly allocation)
+# ============================================================================
+
+let rtos_memory_pool = []
+let rtos_allocated = {}
+
+proc rtos_alloc_obj(obj):
+    push(rtos_memory_pool, obj)
+    rtos_allocated[str(hash(obj))] = obj
+    return obj
+
+proc rtos_free_obj(obj):
+    let key = str(hash(obj))
+    if dict_has(rtos_allocated, key):
+        dict_delete(rtos_allocated, key)
+    let new_pool = []
+    for i in range(len(rtos_memory_pool)):
+        if rtos_memory_pool[i] != obj:
+            push(new_pool, rtos_memory_pool[i])
+    rtos_memory_pool = new_pool
+
+proc rtos_gc_collect():
+    let before = len(rtos_memory_pool)
+    rtos_memory_pool = []
+    rtos_allocated = {}
+    return before
 
 # ============================================================================
 # Initialization
@@ -42,6 +72,9 @@ proc rtos_init():
     rtos_current_task = 0
     rtos_tick_count = 0
     rtos_running = true
+    rtos_gc_ticks = 0
+    rtos_memory_pool = []
+    rtos_allocated = {}
     print("SageRTOS: scheduler initialized (" + str(RTOS_MAX_TASKS) + " tasks, " + str(RTOS_MAX_PRIORITY) + " priorities)")
 
 # ============================================================================
@@ -96,6 +129,13 @@ proc rtos_run():
     
     while rtos_running and rtos_task_count > 0:
         rtos_tick_count = rtos_tick_count + 1
+        rtos_gc_ticks = rtos_gc_ticks + 1
+        
+        # Periodic GC collection for RTOS-managed objects
+        if rtos_gc_ticks >= RTOS_GC_INTERVAL:
+            let freed = rtos_gc_collect()
+            print("SageRTOS: GC collected " + str(freed) + " objects")
+            rtos_gc_ticks = 0
         
         # Wake sleeping tasks
         let i = 0
