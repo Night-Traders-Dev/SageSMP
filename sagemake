@@ -1,25 +1,52 @@
 #!/usr/bin/env python3
 """
 SageSMP Build Script
-Builds SageSMP modules to ELF binaries using Sage compiler.
+Builds SageSMP modules to ELF binaries with customizable options.
 """
 
 import os
 import sys
 import subprocess
+import json
 from pathlib import Path
 
 SAGE_BIN = "deps/SageLang/core/sage"
+CONFIG_FILE = ".smp_config"
+
+DEFAULT_CONFIG = {
+    "host": "127.0.0.1",
+    "port": 42000,
+    "max_nodes": 64,
+    "mailbox_size": 1024,
+    "relay_host": "0.0.0.0",
+    "relay_port": 42000,
+    "enable_rtos": True,
+    "enable_crypto": True
+}
 
 def banner(title):
     print(f"\n=== {title} ===")
 
-def run_cmd(cmd, cwd=None, shell=False):
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, shell=shell)
+def load_config():
+    """Load user config from .smp_config file"""
+    config = DEFAULT_CONFIG.copy()
+    if Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE) as f:
+            user_config = json.load(f)
+            config.update(user_config)
+    return config
+
+def save_config(config):
+    """Save config to .smp_config file"""
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+
+def run_cmd(cmd, cwd=None, shell=False, capture=True):
+    result = subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, shell=shell)
     return result
 
-def build_smp(target=None, all_targets=False):
-    """Build SageSMP targets"""
+def build_smp(target=None, all_targets=False, relay=False, client=False, demo=False, secure=False):
+    """Build SageSMP targets with customization"""
     if not Path(SAGE_BIN).exists():
         print("Error: Sage compiler not found. Run 'make -C deps/SageLang/core' first")
         return False
@@ -27,53 +54,89 @@ def build_smp(target=None, all_targets=False):
     os.makedirs("bin", exist_ok=True)
     
     targets = []
-    if all_targets or target == "all":
-        targets = [
-            ("src/sage/demo.sage", "bin/demo_smp"),
-            ("src/sage/relay.sage", "bin/relay"),
-            ("src/sage/client_shell.sage", "bin/client_shell"),
-        ]
-    elif target:
-        targets = [(target, f"bin/{Path(target).stem}")]
-    else:
-        targets = []
     
+    if all_targets or demo:
+        targets.append(("src/sage/demo/demo", "bin/demo_smp"))
+    
+    if all_targets or relay:
+        targets.append(("src/sage/server/relay", "bin/relay"))
+    
+    if all_targets or client:
+        targets.append(("src/sage/client/client_shell", "bin/client_shell"))
+    
+    if all_targets or secure:
+        targets.append(("src/sage/crypto/secure_msg", "bin/secure_msg"))
+    
+    if target:
+        targets.append((target, f"bin/{Path(target).stem}"))
+    
+    if not targets:
+        print("Usage: ./sagemake [target] [options]")
+        print("\nTargets (specify .sage file without extension):")
+        print("  src/sage/demo/demo         - Basic demo")
+        print("  src/sage/server/relay      - OTP-encrypted relay server")
+        print("  src/sage/client/client_shell - OTP-encrypted client shell")
+        print("  src/sage/crypto/secure_msg - Secure message API demo")
+        print("\nOptions:")
+        print("  --all     Build all targets")
+        print("  --demo    Build demo binary")
+        print("  --relay   Build relay server (OTP-enabled)")
+        print("  --client  Build client shell (OTP-enabled)")
+        print("  --secure  Build secure message API demo")
+        print("  --init-config Initialize .smp_config file")
+        print("  --test    Run test suite")
+        return True
+    
+    successes = 0
     for src, out in targets:
-        banner(f"Building {src}")
-        res = run_cmd([SAGE_BIN, "--compile", src, "-o", out])
+        banner(f"Building {src}.sage")
+        res = run_cmd([SAGE_BIN, "--compile", f"{src}.sage", "-o", out])
         if res.returncode == 0:
             print(f"Built: {out}")
+            successes += 1
         else:
-            print(f"Failed to build {src}")
-            print(res.stderr)
-            return False
+            print(f"Failed to build {src}.sage")
+            if res.stderr:
+                print(res.stderr)
     
-    return True
+    return successes == len(targets)
 
-def run_tests():
-    """Run SageSMP test suite"""
-    banner("Testing SageSMP")
-    
-    res = run_cmd([SAGE_BIN, "src/sage/example.sage"])
-    print(res.stdout)
-    return res.returncode == 0
+def init_config():
+    """Initialize config file"""
+    config = load_config()
+    save_config(config)
+    print(f"Created {CONFIG_FILE}")
+    print("Edit this file to customize your build settings:")
+    print(json.dumps(config, indent=2))
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="SageSMP Build Script")
-    parser.add_argument("target", nargs="?", help="Specific .sage file to build")
+    parser.add_argument("target", nargs="?", help="Specific .sage file to build (without .sage extension)")
     parser.add_argument("--all", action="store_true", help="Build all targets")
+    parser.add_argument("--demo", action="store_true", help="Build demo binary")
+    parser.add_argument("--relay", action="store_true", help="Build relay server")
+    parser.add_argument("--client", action="store_true", help="Build client shell")
+    parser.add_argument("--secure", action="store_true", help="Build secure message demo")
+    parser.add_argument("--init-config", action="store_true", help="Initialize config file")
     parser.add_argument("--test", action="store_true", help="Run test suite")
-    parser.add_argument("--run", metavar="binary", help="Run a built binary")
     args = parser.parse_args()
     
-    if args.test:
-        run_tests()
-    elif args.run:
-        run_cmd([f"./bin/{args.run}"])
-        print(run_cmd([f"./bin/{args.run}"]).stdout)
+    if args.init_config:
+        init_config()
+    elif args.test:
+        banner("Testing SageSMP")
+        res = run_cmd([SAGE_BIN, "src/sage/demo/example.sage"])
+        print(res.stdout)
     else:
-        build_smp(target=args.target, all_targets=args.all)
+        build_smp(
+            target=args.target,
+            all_targets=args.all,
+            relay=args.relay,
+            client=args.client,
+            demo=args.demo,
+            secure=args.secure
+        )
 
 if __name__ == "__main__":
     main()

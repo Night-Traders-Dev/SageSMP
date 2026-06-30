@@ -10,19 +10,30 @@ SageSMP provides a distributed messaging system inspired by Erlang-style mailbox
 
 ```
 src/sage/
-├── __init__.sage      # Core definitions, constants, version
-├── mailbox.sage       # Mailbox system for message queuing and delivery
-├── smp_protocol.sage  # Protocol message types and encoding
-├── node.sage          # Node identity, registry, and lifecycle management
-├── transport.sage     # Network transport layer (TCP framing)
-├── client.sage        # Client implementation for connecting to servers
-├── server.sage        # Server implementation for accepting connections
-├── crypto.sage        # Message signing and encryption utilities
-├── rtos.sage          # Pure-Sage RTOS scheduler with GC-aware cleanup
-├── relay.sage         # Configurable relay server with shell interface
-├── client_shell.sage  # Interactive client shell for sending messages
-├── demo.sage          # Runnable demo (compiles to ELF binary)
-└── example.sage       # Usage examples and test suite
+├── core/
+│   ├── __init__.sage      # Core definitions, constants, version
+│   └── smp_protocol.sage  # Protocol message types and encoding
+├── mailbox/
+│   └── mailbox.sage       # Mailbox system for message queuing and delivery
+├── crypto/
+│   ├── crypto.sage        # Message signing and encryption utilities
+│   ├── secure_msg.sage    # Secure message API with OTP encryption
+│   └── otp_crypto.sage    # Standalone OTP encryption demo
+├── node/
+│   └── node.sage          # Node identity, registry, and lifecycle management
+├── transport/
+│   └── transport.sage     # Network transport layer (TCP framing)
+├── client/
+│   ├── client.sage        # Client implementation for connecting to servers
+│   └── client_shell.sage  # Interactive client shell with OTP encryption
+├── server/
+│   ├── server.sage        # Server implementation for accepting connections
+│   └── relay.sage         # Configurable relay server with OTP encryption
+├── rtos/
+│   └── rtos.sage          # Pure-Sage RTOS scheduler with GC-aware cleanup
+└── demo/
+    ├── demo.sage          # Runnable demo (compiles to ELF binary)
+    └── example.sage       # Usage examples and test suite
 ```
 
 ## Quick Start
@@ -114,12 +125,12 @@ smp_mailbox.on_mail(mbox, MSG_TYPE_DATA, proc(msg):
 ## Running Tests
 
 ```bash
-sage src/sage/example.sage
+sage src/sage/demo/example.sage
 ```
 
 Or compile to binary:
 ```bash
-sage --compile src/sage/demo.sage -o bin/demo_smp
+sage --compile src/sage/demo/demo.sage -o bin/demo_smp
 ./bin/demo_smp
 ```
 
@@ -161,11 +172,20 @@ Defaults can be overridden in code:
 Use the included sagemake script:
 
 ```bash
+# Initialize config file
+./sagemake --init-config
+
 # Build all binaries
 ./sagemake --all
 
-# Build specific file
-./sagemake src/sage/demo.sage
+# Build specific component
+./sagemake src/sage/client/client_shell
+
+# Build relay server
+./sagemake --relay
+
+# Build client shell
+./sagemake --client
 
 # Run demo
 ./bin/demo_smp
@@ -184,7 +204,7 @@ Use the included sagemake script:
 ├─────────────────────────────────────────────┤
 │          Transport (smp.transport)          │
 ├─────────────────────────────────────────────┤
-│           Protocol (smp.smp_protocol)       │
+│           Protocol (smp.core)             │
 ├─────────────────────────────────────────────┤
 │           Mailbox (smp.mailbox)            │
 ├─────────────────────────────────────────────┤
@@ -198,12 +218,13 @@ MIT
 
 ## Relay Server
 
-The relay server allows runtime configuration of message forwarding rules:
+The relay server allows runtime configuration of message forwarding rules with OTP encryption:
 
 ```sage
 # Add relay rule: when trigger_msg received, forward forward_msg to target
-add_relay_rule("hello", "192.168.1.100", 42001, "Hello from relay!")
-add_relay_rule("status", "192.168.1.100", 42001, "Status OK")
+# All forwarded messages are automatically OTP-encrypted
+add_relay_rule("hello", "192.168.1.100", 42001, "Hello from relay!", "secret_key", "otp_pass", 100)
+add_relay_rule("status", "192.168.1.100", 42001, "Status OK", "secret_key", "otp_pass", 200)
 
 # Shell commands for runtime configuration
 relay_shell_help()
@@ -215,10 +236,42 @@ relay_shell_help()
 
 ## Client Shell
 
-Interactive shell for connecting to and messaging any node:
+Interactive shell for connecting to and messaging any node with OTP encryption:
 
 ```sage
 client_connect("192.168.1.100", 42001)
-client_send("192.168.1.100", 42001, "My message")
+client_send_secure("192.168.1.100", 42001, "My message", "secret_key", "otp_pass", 999, sender_id, recipient_id)
 client_show_outbox()
+```
+
+## End-to-End Encryption
+
+All secure messaging uses pure Sage OTP encryption:
+
+```sage
+# Send encrypted message
+let envelope = secure_send(message, secret_key, otp_passphrase, otp_seed, sender_id, recipient_id)
+
+# Receive and decrypt
+let decrypted = secure_receive(envelope, secret_key, otp_passphrase, otp_seed, expected_sender)
+```
+
+The encryption uses:
+- **OTP Key**: Derived from passphrase + seed using pure Sage hash
+- **Signing**: Simple hash-based signature with secret key
+- **No external dependencies**: Pure Sage implementation
+
+## Build Configuration
+
+Create `.smp_config` to customize build settings:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 42000,
+  "relay_host": "0.0.0.0",
+  "relay_port": 42000,
+  "enable_rtos": true,
+  "enable_crypto": true
+}
 ```
