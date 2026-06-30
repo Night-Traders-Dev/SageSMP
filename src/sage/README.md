@@ -18,7 +18,10 @@ src/sage/
 ├── client.sage        # Client implementation for connecting to servers
 ├── server.sage        # Server implementation for accepting connections
 ├── crypto.sage        # Message signing and encryption utilities
-├── rtos.sage          # Pure-Sage RTOS scheduler for task management
+├── rtos.sage          # Pure-Sage RTOS scheduler with GC-aware cleanup
+├── relay.sage         # Configurable relay server with shell interface
+├── client_shell.sage  # Interactive client shell for sending messages
+├── demo.sage          # Runnable demo (compiles to ELF binary)
 └── example.sage       # Usage examples and test suite
 ```
 
@@ -114,10 +117,30 @@ smp_mailbox.on_mail(mbox, MSG_TYPE_DATA, proc(msg):
 sage src/sage/example.sage
 ```
 
-Or from Sage code:
-```sage
-import smp.example
-smp_example.run_all()
+Or compile to binary:
+```bash
+sage --compile src/sage/demo.sage -o bin/demo_smp
+./bin/demo_smp
+```
+
+### Demo Output
+
+The demo shows:
+- **Mailbox**: Message queuing with FIFO delivery and statistics tracking
+- **Node Registry**: Node discovery, registration, and capability management  
+- **RTOS**: Priority-based task scheduling with periodic GC-aware memory cleanup
+
+Example:
+```
+=== SageSMP Mailbox Demo ===
+Sending messages...
+  Sent 5 messages
+Processing messages...
+  Handler: Received message #1: Message 1
+  ...
+Mailbox stats:
+  Sent: 5
+  Received: 5
 ```
 
 ## Configuration
@@ -154,3 +177,30 @@ Defaults can be overridden in code:
 ## License
 
 MIT
+
+## Relay Server
+
+The relay server allows runtime configuration of message forwarding rules:
+
+```sage
+# Add relay rule: when trigger_msg received, forward forward_msg to target
+add_relay_rule("hello", "192.168.1.100", 42001, "Hello from relay!")
+add_relay_rule("status", "192.168.1.100", 42001, "Status OK")
+
+# Shell commands for runtime configuration
+relay_shell_help()
+#   add <trigger> <host> <port> <forward_msg>  - Add relay rule
+#   remove <index>                           - Remove relay rule
+#   list                                     - List all rules
+#   clear                                    - Clear all rules
+```
+
+## Client Shell
+
+Interactive shell for connecting to and messaging any node:
+
+```sage
+client_connect("192.168.1.100", 42001)
+client_send("192.168.1.100", 42001, "My message")
+client_show_outbox()
+```
