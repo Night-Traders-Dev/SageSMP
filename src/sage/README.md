@@ -156,6 +156,24 @@ Defaults can be overridden in code:
 - `DEFAULT_MAX_NODES` (64)
 - `DEFAULT_MAILBOX_SIZE` (1024)
 
+## Building
+
+Use the included sagemake script:
+
+```bash
+# Build all binaries
+./sagemake --all
+
+# Build specific file
+./sagemake src/sage/demo.sage
+
+# Run demo
+./bin/demo_smp
+
+# Run tests
+./sagemake --test
+```
+
 ## Architecture
 
 ```
