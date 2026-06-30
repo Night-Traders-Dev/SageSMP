@@ -45,7 +45,7 @@ def run_cmd(cmd, cwd=None, shell=False, capture=True):
     result = subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, shell=shell)
     return result
 
-def build_smp(target=None, all_targets=False, relay=False, client=False, demo=False, secure=False, orangepi=False, rpi2=False, rpi4=False, smp_client=False):
+def build_smp(target=None, all_targets=False, relay=False, client=False, demo=False, secure=False, orangepi=False, rpi2=False, rpi4=False, smp_client=False, **kwargs):
     """Build SageSMP targets with customization"""
     if not Path(SAGE_BIN).exists():
         print("Error: Sage compiler not found. Run 'make -C deps/SageLang/core' first")
@@ -57,6 +57,9 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
     
     if all_targets or demo:
         targets.append(("src/sage/demo/demo", "bin/demo_smp"))
+    
+    if all_targets or kwargs.get('test_network'):
+        targets.append(("src/sage/demo/test_network", "bin/test_network"))
     
     if all_targets or relay:
         targets.append(("src/sage/server/relay", "bin/relay"))
@@ -86,6 +89,7 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
         print("Usage: ./sagemake [target] [options]")
         print("\nTargets (specify .sage file without extension):")
         print("  src/sage/demo/demo         - Basic demo")
+        print("  src/sage/demo/test_network  - Router + 3-client network test")
         print("  src/sage/server/relay      - OTP-encrypted relay server")
         print("  src/sage/server/orangepi_relay - OrangePi cluster relay server")
         print("  src/sage/client/client_shell - OTP-encrypted client shell")
@@ -96,6 +100,7 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
         print("\nOptions:")
         print("  --all        Build all targets")
         print("  --demo       Build demo binary")
+        print("  --test-net   Build router+3-client network test")
         print("  --relay      Build relay server (OTP-enabled)")
         print("  --orangepi   Build OrangePi relay server")
         print("  --rpi2       Build RPi2 client")
@@ -135,6 +140,7 @@ def main():
     parser.add_argument("target", nargs="?", help="Specific .sage file to build (without .sage extension)")
     parser.add_argument("--all", action="store_true", help="Build all targets")
     parser.add_argument("--demo", action="store_true", help="Build demo binary")
+    parser.add_argument("--test-net", action="store_true", dest="test_network", help="Build router+3-client network test")
     parser.add_argument("--relay", action="store_true", help="Build relay server")
     parser.add_argument("--client", action="store_true", help="Build client shell")
     parser.add_argument("--smp-client", action="store_true", dest="smp_client", help="Build unified client+relay interactive shell")
@@ -163,7 +169,8 @@ def main():
             client=args.client,
             smp_client=args.smp_client,
             demo=args.demo,
-            secure=args.secure
+            secure=args.secure,
+            test_network=args.test_network
         )
 
 if __name__ == "__main__":
