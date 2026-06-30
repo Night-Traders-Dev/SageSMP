@@ -45,7 +45,7 @@ def run_cmd(cmd, cwd=None, shell=False, capture=True):
     result = subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, shell=shell)
     return result
 
-def build_smp(target=None, all_targets=False, relay=False, client=False, demo=False, secure=False):
+def build_smp(target=None, all_targets=False, relay=False, client=False, demo=False, secure=False, orangepi=False, rpi2=False, rpi4=False):
     """Build SageSMP targets with customization"""
     if not Path(SAGE_BIN).exists():
         print("Error: Sage compiler not found. Run 'make -C deps/SageLang/core' first")
@@ -61,6 +61,15 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
     if all_targets or relay:
         targets.append(("src/sage/server/relay", "bin/relay"))
     
+    if all_targets or orangepi:
+        targets.append(("src/sage/server/orangepi_relay", "bin/orangepi_relay"))
+    
+    if all_targets or rpi2:
+        targets.append(("src/sage/client/rpi2_client", "bin/rpi2_client"))
+    
+    if all_targets or rpi4:
+        targets.append(("src/sage/client/rpi4_client", "bin/rpi4_client"))
+    
     if all_targets or client:
         targets.append(("src/sage/client/client_shell", "bin/client_shell"))
     
@@ -75,12 +84,18 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
         print("\nTargets (specify .sage file without extension):")
         print("  src/sage/demo/demo         - Basic demo")
         print("  src/sage/server/relay      - OTP-encrypted relay server")
+        print("  src/sage/server/orangepi_relay - OrangePi cluster relay server")
         print("  src/sage/client/client_shell - OTP-encrypted client shell")
+        print("  src/sage/client/rpi2_client - RPi2 cluster client")
+        print("  src/sage/client/rpi4_client - RPi4 cluster client")
         print("  src/sage/crypto/secure_msg - Secure message API demo")
         print("\nOptions:")
         print("  --all     Build all targets")
         print("  --demo    Build demo binary")
         print("  --relay   Build relay server (OTP-enabled)")
+        print("  --orangepi Build OrangePi relay server")
+        print("  --rpi2    Build RPi2 client")
+        print("  --rpi4    Build RPi4 client")
         print("  --client  Build client shell (OTP-enabled)")
         print("  --secure  Build secure message API demo")
         print("  --init-config Initialize .smp_config file")
@@ -118,6 +133,9 @@ def main():
     parser.add_argument("--relay", action="store_true", help="Build relay server")
     parser.add_argument("--client", action="store_true", help="Build client shell")
     parser.add_argument("--secure", action="store_true", help="Build secure message demo")
+    parser.add_argument("--orangepi", action="store_true", help="Build OrangePi relay server")
+    parser.add_argument("--rpi2", action="store_true", help="Build RPi2 client")
+    parser.add_argument("--rpi4", action="store_true", help="Build RPi4 client")
     parser.add_argument("--init-config", action="store_true", help="Initialize config file")
     parser.add_argument("--test", action="store_true", help="Run test suite")
     args = parser.parse_args()
@@ -133,6 +151,9 @@ def main():
             target=args.target,
             all_targets=args.all,
             relay=args.relay,
+            orangepi=args.orangepi,
+            rpi2=args.rpi2,
+            rpi4=args.rpi4,
             client=args.client,
             demo=args.demo,
             secure=args.secure
