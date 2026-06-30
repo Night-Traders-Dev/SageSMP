@@ -216,7 +216,69 @@ Use the included sagemake script:
 
 MIT
 
-## Relay Server
+## SageSMP Cluster (OrangePi + RPi2 + RPi4)
+
+### OrangePi Relay Server
+
+The OrangePi acts as the central relay server for the cluster:
+
+```bash
+# On OrangePi
+./sagemake --orangepi
+./bin/orangepi_relay
+```
+
+The relay listens on `0.0.0.0:42000` and collects periodic info from connected clients.
+
+### RPi2/RPi4 Clients
+
+Clients connect to the OrangePi relay and share periodic system status:
+
+```bash
+# On RPi2 (10.42.1.109)
+./sagemake --rpi2
+./bin/rpi2_client
+# Sends: Temp, Load, Memory info every 5 ticks
+
+# On RPi4 (10.42.0.141)
+./sagemake --rpi4
+./bin/rpi4_client
+# Sends: Temp, Load, Memory, GPU temp, Throttling status
+```
+
+### Dashboard Integration
+
+The SageCluster dashboard includes SMP protocol monitoring:
+
+- **API Endpoint**: `/api/smp-status` - Returns running status of relay and clients
+- **JS Module**: `static/js/smp_monitor.js` - Updates dashboard with SMP cards in real-time
+
+To deploy on OrangePi:
+```bash
+# Copy source
+rsync -av src/sage OrangePi:~/SageSMP/
+scp sagemake OrangePi:~/SageSMP/
+
+# Build on OrangePi
+ssh OrangePi '~/SageSMP/sagemake --orangepi'
+
+# Restart dashboard to see SMP cards
+ssh OrangePi 'pm2 restart sagecluster'
+```
+
+### Network Configuration
+
+```
+OrangePi (192.168.1.10) - Relay Server - port 42000
+├── RPi2 (10.42.1.109) - Client - port 42001
+└── RPi4 (10.42.0.141) - Client - port 42002
+```
+
+Shared secret for OTP encryption: `orangepi_cluster_secret_2026`
+
+## Build Configuration
+
+Create `.smp_config` to customize build settings:
 
 The relay server allows runtime configuration of message forwarding rules with OTP encryption:
 
