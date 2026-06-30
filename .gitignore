@@ -1,0 +1,8 @@
+# SageSMP - Pure Sage Multicore Protocol
+# ======================================
+
+# Build artifacts
+ *.o
+ *.obj
+ build/
+ *.log

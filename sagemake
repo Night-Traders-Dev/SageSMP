@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""
+SageSMP Build Script
+Builds SageSMP modules to ELF binaries using Sage compiler.
+"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+SAGE_BIN = "deps/SageLang/core/sage"
+
+def banner(title):
+    print(f"\n=== {title} ===")
+
+def run_cmd(cmd, cwd=None, shell=False):
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, shell=shell)
+    return result
+
+def build_smp(target=None, all_targets=False):
+    """Build SageSMP targets"""
+    if not Path(SAGE_BIN).exists():
+        print("Error: Sage compiler not found. Run 'make -C deps/SageLang/core' first")
+        return False
+    
+    os.makedirs("bin", exist_ok=True)
+    
+    targets = []
+    if all_targets or target == "all":
+        targets = [
+            ("src/sage/demo.sage", "bin/demo_smp"),
+            ("src/sage/relay.sage", "bin/relay"),
+            ("src/sage/client_shell.sage", "bin/client_shell"),
+        ]
+    elif target:
+        targets = [(target, f"bin/{Path(target).stem}")]
+    else:
+        targets = []
+    
+    for src, out in targets:
+        banner(f"Building {src}")
+        res = run_cmd([SAGE_BIN, "--compile", src, "-o", out])
+        if res.returncode == 0:
+            print(f"Built: {out}")
+        else:
+            print(f"Failed to build {src}")
+            print(res.stderr)
+            return False
+    
+    return True
+
+def run_tests():
+    """Run SageSMP test suite"""
+    banner("Testing SageSMP")
+    
+    res = run_cmd([SAGE_BIN, "src/sage/example.sage"])
+    print(res.stdout)
+    return res.returncode == 0
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="SageSMP Build Script")
+    parser.add_argument("target", nargs="?", help="Specific .sage file to build")
+    parser.add_argument("--all", action="store_true", help="Build all targets")
+    parser.add_argument("--test", action="store_true", help="Run test suite")
+    parser.add_argument("--run", metavar="binary", help="Run a built binary")
+    args = parser.parse_args()
+    
+    if args.test:
+        run_tests()
+    elif args.run:
+        run_cmd([f"./bin/{args.run}"])
+        print(run_cmd([f"./bin/{args.run}"]).stdout)
+    else:
+        build_smp(target=args.target, all_targets=args.all)
+
+if __name__ == "__main__":
+    main()
