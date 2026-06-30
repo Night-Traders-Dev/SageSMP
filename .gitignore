@@ -2,7 +2,9 @@
 # ======================================
 
 # Build artifacts
- *.o
- *.obj
- build/
- *.log
+*.o
+*.obj
+build/
+*.log
+bin/
+*.spv
