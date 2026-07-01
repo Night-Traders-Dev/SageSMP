@@ -147,7 +147,7 @@ proc _generate_otp_key(passphrase, length, seed):
     let key = []
     for i in range(length):
         let h = _simple_hash(passphrase + str(i), seed)
-        push(key, (h % 255) - 127)
+        push(key, (h % 127) - 63)
     return key
 
 proc _sign(message, secret_key, node_id):
@@ -183,14 +183,18 @@ proc crypto_seal(message, secret_key, otp_pass, otp_seed, sender_id, recipient_i
         "payload": encrypted,
         "otp":     key,
         "sig":     sig,
+        "key_len": len(str(message)),
         "from":    sender_id,
         "to":      recipient_id
     }
 
 proc crypto_open(envelope, secret_key, otp_pass, otp_seed, expected_sender):
+    if envelope["sig"] == nil or len(envelope["sig"]) < 2:
+        return nil
     if not _verify_sig(envelope["payload"], envelope["sig"], secret_key, expected_sender):
         return nil
-    let key = _generate_otp_key(otp_pass, len(str(envelope["payload"])), otp_seed)
+    let key_len = envelope["key_len"]
+    let key = _generate_otp_key(otp_pass, key_len, otp_seed)
     return _otp_decrypt(envelope["payload"], key)
 
 # ============================================================================
@@ -274,7 +278,7 @@ proc router_unregister(node_id):
         return true
     return false
 
-proc router_route(src_id, dst_id, payload):
+proc router_route(src_id, dst_id, payload, sig, key_len):
     let key = str(dst_id)
     if not dict_has(router_state["clients"], key):
         print("[Router] Route FAILED: node-" + str(dst_id) + " not registered")
@@ -283,9 +287,14 @@ proc router_route(src_id, dst_id, payload):
     if not dst["connected"]:
         print("[Router] Route FAILED: node-" + str(dst_id) + " offline")
         return false
-    # Deliver into destination mailbox
     let mb = router_mailboxes[key]
-    mb_send(mb, {"from": src_id, "to": dst_id, "payload": payload, "ts": rtos_tick})
+    let sig_val = sig
+    let key_len_val = key_len
+    if sig_val == nil:
+        sig_val = []
+    if key_len_val == nil:
+        key_len_val = len(str(payload))
+    mb_send(mb, {"from": src_id, "to": dst_id, "payload": payload, "sig": sig_val, "key_len": key_len_val, "ts": rtos_tick})
     dst["msg_count"] = dst["msg_count"] + 1
     push(router_state["route_log"], {
         "from": src_id, "to": dst_id,
@@ -514,8 +523,7 @@ proc cmd_send(target_id, message):
     })
     push(session["msg_log"], {"dir": "OUT", "to": target_id, "text": message, "ts": 0})
 
-    # Hand encrypted payload to router
-    router_route(session["my_id"], target_id, envelope["payload"])
+    router_route(session["my_id"], target_id, envelope["payload"], envelope["sig"], envelope["key_len"])
     print("[OUT -> node-" + str(target_id) + "] " + message +
           "  (seq=" + str(session["seq"]) + ")")
     return true
@@ -530,7 +538,15 @@ proc cmd_broadcast(message):
     for i in range(len(ids)):
         let c = router_state["clients"][ids[i]]
         if c["connected"] and c["id"] != session["my_id"]:
-            router_route(session["my_id"], c["id"], message)
+            let envelope = crypto_seal(
+                message,
+                session["secret_key"],
+                session["otp_pass"],
+                session["otp_seed"],
+                session["my_id"],
+                c["id"]
+            )
+            router_route(session["my_id"], c["id"], envelope["payload"], envelope["sig"], envelope["key_len"])
             sent = sent + 1
     print("[BCAST] Routed to " + str(sent) + " peer(s)")
     return true
@@ -558,6 +574,48 @@ proc cmd_recv_simulate(sender_id, encrypted_payload):
     print("[IN  <- node-" + str(sender_id) + "] " + plaintext)
     _auto_relay_check(sender_id, plaintext)
     return plaintext
+
+proc _poll_router_mailbox():
+    if session["my_id"] == 0:
+        return
+    let key = str(session["my_id"])
+    if not dict_has(router_mailboxes, key):
+        return
+    let mb = router_mailboxes[key]
+    let msg = mb_recv(mb)
+    while msg != nil:
+        let payload = msg["payload"]
+        let key_len_val = msg["key_len"]
+        if key_len_val == nil:
+            key_len_val = len(str(payload))
+        if dict_has(msg, "sig") and len(msg["sig"]) >= 2:
+            let envelope = {
+                "payload": payload,
+                "sig":     msg["sig"],
+                "key_len": key_len_val,
+                "from":    msg["from"],
+                "to":      session["my_id"]
+            }
+            let plaintext = crypto_open(
+                envelope,
+                session["secret_key"],
+                session["otp_pass"],
+                session["otp_seed"],
+                msg["from"]
+            )
+            if plaintext != nil:
+                push(session["inbox"], {"dir": "IN", "from": msg["from"], "text": plaintext, "ts": msg["ts"]})
+                push(session["msg_log"], {"dir": "IN", "from": msg["from"], "text": plaintext, "ts": msg["ts"]})
+                print("[IN  <- node-" + str(msg["from"]) + "] " + plaintext)
+                _auto_relay_check(msg["from"], plaintext)
+        else:
+            let key_gen = _generate_otp_key(session["otp_pass"], key_len_val, session["otp_seed"])
+            let plaintext = _otp_decrypt(payload, key_gen)
+            push(session["inbox"], {"dir": "IN", "from": msg["from"], "text": plaintext, "ts": msg["ts"]})
+            push(session["msg_log"], {"dir": "IN", "from": msg["from"], "text": plaintext, "ts": msg["ts"]})
+            print("[IN  <- node-" + str(msg["from"]) + "] " + plaintext)
+            _auto_relay_check(msg["from"], plaintext)
+        msg = mb_recv(mb)
 
 # ============================================================================
 # Client — Inbox / Outbox / Log
@@ -1121,12 +1179,23 @@ proc run_client_shell():
     print("  Type 'help' for available commands.")
     print("")
 
+    # Initialize RTOS for local simulation (so accept_task processes JOINs)
+    rtos_init()
+    rtos_task_create(TASK_ACCEPT,    7, 1)
+    rtos_task_create(TASK_MESSAGE,   5, 2)
+    rtos_task_create(TASK_HEARTBEAT, 2, 10)
+    print("  [RTOS] Local router tasks initialized for simulation.")
+    print("")
+
     let running = true
     while running:
+        # Run one tick before each prompt to process queued JOINs/messages
+        rtos_tick_once()
+        _poll_router_mailbox()
         let id_label = ""
         if session["my_id"] != 0:
             id_label = "[node-" + str(session["my_id"]) + "] "
-        let line = input("smp " + id_label + "> ")
+        let line = input("smp-tick=" + str(rtos_tick - 1) + " " + id_label + "> ")
         if line == nil or len(str(line)) == 0:
             # continue
         else:

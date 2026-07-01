@@ -78,7 +78,7 @@ proc _generate_otp_key(passphrase, length, seed):
     let key = []
     for i in range(length):
         let h = _simple_hash(passphrase + str(i), seed)
-        push(key, (h % 255) - 127)
+        push(key, (h % 127) - 63)
     return key
 
 proc _sign(message, secret_key, node_id):
@@ -110,12 +110,15 @@ proc crypto_seal(message, secret_key, otp_pass, otp_seed, sender_id, recipient_i
     let key       = _generate_otp_key(otp_pass, len(str(message)), otp_seed)
     let encrypted = _otp_encrypt(message, key)
     let sig       = _sign(encrypted, secret_key, sender_id)
-    return {"payload": encrypted, "sig": sig, "from": sender_id, "to": recipient_id}
+    return {"payload": encrypted, "sig": sig, "key_len": len(str(message)), "from": sender_id, "to": recipient_id}
 
 proc crypto_open(envelope, secret_key, otp_pass, otp_seed, expected_sender):
+    if envelope["sig"] == nil or len(envelope["sig"]) < 2:
+        return nil
     if not _verify_sig(envelope["payload"], envelope["sig"], secret_key, expected_sender):
         return nil
-    let key = _generate_otp_key(otp_pass, len(str(envelope["payload"])), otp_seed)
+    let key_len = envelope["key_len"]
+    let key = _generate_otp_key(otp_pass, key_len, otp_seed)
     return _otp_decrypt(envelope["payload"], key)
 
 # ============================================================================
@@ -180,7 +183,7 @@ proc router_unregister(node_id):
         return true
     return false
 
-proc router_route(src_id, dst_id, payload):
+proc router_route(src_id, dst_id, payload, sig, key_len):
     let key = str(dst_id)
     if not dict_has(router_state["clients"], key):
         print("[Router] FAIL: node-" + str(dst_id) + " not registered")
@@ -190,7 +193,7 @@ proc router_route(src_id, dst_id, payload):
         print("[Router] FAIL: node-" + str(dst_id) + " offline")
         return false
     let mb = router_mailboxes[key]
-    mb_send(mb, {"from": src_id, "to": dst_id, "payload": payload, "tick": rtos_tick})
+    mb_send(mb, {"from": src_id, "to": dst_id, "payload": payload, "sig": sig, "key_len": key_len, "tick": rtos_tick})
     dst["msg_count"] = dst["msg_count"] + 1
     push(router_state["route_log"], {"from": src_id, "to": dst_id, "payload_len": len(str(payload)), "tick": rtos_tick})
     print("[Router] Routed  node-" + str(src_id) + " -> node-" + str(dst_id) + "  (" + str(len(str(payload))) + " bytes)")
@@ -220,14 +223,11 @@ proc task_body_message():
     let total = 0
     for i in range(len(ids)):
         let mb = router_mailboxes[ids[i]]
-        let msg = mb_recv(mb)
-        while msg != nil:
-            print("[message_task] Delivering  node-" + str(msg["from"]) +
-                  " -> node-" + str(msg["to"]) + "  (tick=" + str(msg["tick"]) + ")")
-            total = total + 1
-            msg = mb_recv(mb)
+        let pending = mb_pending(mb)
+        if pending > 0:
+            total = total + pending
     if total > 0:
-        print("[message_task] Delivered " + str(total) + " message(s)")
+        print("[message_task] " + str(total) + " message(s) pending delivery")
 
 proc task_body_heartbeat():
     router_state["heartbeat_ticks"] = router_state["heartbeat_ticks"] + 1
@@ -320,14 +320,14 @@ proc client_send(c, dst_id, plaintext):
     let envelope = crypto_seal(plaintext, SHARED_SECRET, SHARED_OTP_PASS, SHARED_OTP_SEED, c["node_id"], dst_id)
     push(c["outbox"], {"to": dst_id, "text": plaintext, "payload": envelope["payload"]})
     print("[" + c["name"] + " node-" + str(c["node_id"]) + "] SEND -> node-" + str(dst_id) + "  \"" + plaintext + "\"")
-    router_route(c["node_id"], dst_id, envelope["payload"])
+    router_route(c["node_id"], dst_id, envelope["payload"], envelope["sig"], envelope["key_len"])
     return true
 
-# Decrypt a raw payload delivered from the router
-proc client_decrypt(c, from_id, payload):
+proc client_decrypt(c, from_id, payload, sig, key_len):
     let envelope = {
         "payload": payload,
-        "sig": _sign(payload, SHARED_SECRET, from_id),
+        "sig": sig,
+        "key_len": key_len,
         "from": from_id,
         "to": c["node_id"]
     }
@@ -347,7 +347,7 @@ proc client_poll(c):
     let mb = router_mailboxes[key]
     let msg = mb_recv(mb)
     while msg != nil:
-        client_decrypt(c, msg["from"], msg["payload"])
+        client_decrypt(c, msg["from"], msg["payload"], msg["sig"], msg["key_len"])
         msg = mb_recv(mb)
 
 # Add an auto-relay rule: when message text == trigger, send reply_msg to sender
@@ -370,7 +370,7 @@ proc client_poll_with_relay(c):
     let mb = router_mailboxes[key]
     let msg = mb_recv(mb)
     while msg != nil:
-        let text = client_decrypt(c, msg["from"], msg["payload"])
+        let text = client_decrypt(c, msg["from"], msg["payload"], msg["sig"], msg["key_len"])
         if text != nil:
             client_check_relay(c, msg["from"], text)
         msg = mb_recv(mb)

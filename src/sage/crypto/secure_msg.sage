@@ -42,7 +42,7 @@ proc generate_otp_key(passphrase, length, seed):
     let key = []
     for i in range(length):
         let h = simple_hash(passphrase + str(i), seed)
-        push(key, (h % 255) - 127)
+        push(key, (h % 127) - 63)
     return key
 
 proc sign_message(message, secret_key, node_id):
