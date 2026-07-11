@@ -170,4 +170,4 @@ proc run_all():
     return true
 
 # Uncomment to run tests
-# run_all()
+run_all()

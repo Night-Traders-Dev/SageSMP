@@ -10,7 +10,7 @@ import subprocess
 import json
 from pathlib import Path
 
-SAGE_BIN = "deps/SageLang/core/sage"
+SAGE_BIN = "/usr/local/bin/sage"
 CONFIG_FILE = ".smp_config"
 
 DEFAULT_CONFIG = {

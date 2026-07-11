@@ -1,0 +1,111 @@
+SAGEBC1
+functions 0
+chunks 12
+chunk
+constants 2
+string 13
+636f72652e5f5f696e69745f5f
+string 8
+5f5f696e69745f5f
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 17
+636f72652e736d705f70726f746f636f6c
+string 12
+736d705f70726f746f636f6c
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 15
+6d61696c626f782e6d61696c626f78
+string 7
+6d61696c626f78
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 13
+63727970746f2e63727970746f
+string 6
+63727970746f
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 17
+63727970746f2e7365637572655f6d7367
+string 10
+7365637572655f6d7367
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 17
+63727970746f2e6f74705f63727970746f
+string 10
+6f74705f63727970746f
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 9
+6e6f64652e6e6f6465
+string 4
+6e6f6465
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 19
+7472616e73706f72742e7472616e73706f7274
+string 9
+7472616e73706f7274
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 13
+7365727665722e736572766572
+string 6
+736572766572
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 12
+7365727665722e72656c6179
+string 5
+72656c6179
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 13
+636c69656e742e636c69656e74
+string 6
+636c69656e74
+code 8
+340000060001012c
+endchunk
+chunk
+constants 2
+string 9
+72746f732e72746f73
+string 4
+72746f73
+code 8
+340000060001012c
+endchunk
