@@ -4,6 +4,8 @@
 
 gc_disable()
 
+import json
+
 let SMP_OP_HEARTBEAT = 0
 let SMP_OP_MESSAGE = 1
 let SMP_OP_JOIN = 2
@@ -72,34 +74,35 @@ proc build_broadcast(sender_id, payload):
 
 # Encode message to string for transmission
 proc encode(msg):
-    # Simple JSON-style encoding (Sage native)
-    let result = "{"
-    result = result + "\"op\":" + str(msg["op"]) + ","
-    result = result + "\"sender\":" + str(msg["sender"]) + ","
-    result = result + "\"target\":" + str(msg["target"]) + ","
-    result = result + "\"ts\":" + str(msg["timestamp"])
-    
-    # Encode payload if present
-    if msg["payload"] != nil:
-        if type(msg["payload"]) == "String":
-            result = result + ",\"payload\":\"" + msg["payload"] + "\""
-        elif type(msg["payload"]) == "Number":
-            result = result + ",\"payload\":" + str(msg["payload"])
+    # Ensure both "ts" and "timestamp" keys are set to support legacy code/dashboards
+    if not dict_has(msg, "ts"):
+        if dict_has(msg, "timestamp"):
+            msg["ts"] = msg["timestamp"]
         else:
-            result = result + ",\"payload\":\"" + str(msg["payload"]) + "\""
+            msg["ts"] = clock()
         end
     end
+    if not dict_has(msg, "timestamp"):
+        msg["timestamp"] = msg["ts"]
+    end
     
-    result = result + "}"
-    return result
+    let root = json.cJSON_FromSage(msg)
+    let encoded = json.cJSON_PrintUnformatted(root)
+    return encoded
 
 # Decode encoded message string back to dict
 proc decode(encoded):
-    let msg = {}
-    # Simple parsing - in real implementation would use json module
-    # For now, returns the encoded string wrapped
-    msg["raw"] = encoded
-    msg["decoded_at"] = clock()
+    let root = json.cJSON_Parse(encoded)
+    if root == nil:
+        return nil
+    end
+    let msg = json.cJSON_ToSage(root)
+    # Ensure both "ts" and "timestamp" keys are set
+    if dict_has(msg, "ts"):
+        msg["timestamp"] = msg["ts"]
+    elif dict_has(msg, "timestamp"):
+        msg["ts"] = msg["timestamp"]
+    end
     return msg
 
 # ============================================================================

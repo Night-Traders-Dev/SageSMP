@@ -1,15 +1,15 @@
 # Transport Module
 
-Network transport layer for SMP communication with TCP socket support.
+Network transport layer for SMP communication with real native TCP socket support.
 
 ## Overview
 
-The transport module provides low-level network primitives:
-- Socket creation and management
-- TCP client/server creation
+The transport module provides low-level network primitives fully wired to real OS sockets via the native Sage `tcp` module:
+- Native socket creation and lifecycle management
+- Native TCP client/server connections
 - Message framing with length prefixes
-- Buffer management
-- Connection lifecycle
+- Buffer management for framed messages
+- Connection state lifecycle
 - Heartbeat tracking
 
 ## API Reference

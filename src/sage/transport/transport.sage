@@ -4,6 +4,8 @@
 
 gc_disable()
 
+import tcp
+
 # Transport modes
 let TRANSPORT_TCP = 0
 let TRANSPORT_UDP = 1
@@ -14,20 +16,26 @@ let TRANSPORT_UNIX = 2
 # ============================================================================
 
 proc create_socket():
-    # Using native socket module
     let sock = {}
     sock["fd"] = -1
     sock["host"] = ""
     sock["port"] = 0
     sock["connected"] = false
     sock["last_error"] = nil
+    sock["is_listener"] = false
     return sock
 
 proc connect(sock, host, port):
     sock["host"] = host
     sock["port"] = port
+    let fd = tcp.connect(host, port)
+    if fd == -1:
+        sock["last_error"] = "connection failed"
+        sock["connected"] = false
+        return false
+    end
+    sock["fd"] = fd
     sock["connected"] = true
-    sock["fd"] = 1
     return true
 
 proc bind(sock, host, port):
@@ -36,27 +44,61 @@ proc bind(sock, host, port):
     return true
 
 proc listen(sock, backlog):
+    let fd = tcp.listen(sock["host"], sock["port"], backlog)
+    if fd == -1:
+        sock["last_error"] = "listen failed"
+        sock["connected"] = false
+        return false
+    end
+    sock["fd"] = fd
+    sock["is_listener"] = true
+    sock["connected"] = true
     return true
 
 proc accept(sock):
+    if not sock["connected"] or sock["fd"] == -1:
+        return nil
+    end
+    let client_fd = tcp.accept(sock["fd"])
+    if client_fd == -1:
+        return nil
+    end
     let client = create_socket()
+    client["fd"] = client_fd
     client["connected"] = true
+    client["host"] = "127.0.0.1" # Placeholder
+    client["port"] = 0           # Placeholder
     return client
 
 proc send(sock, data):
-    if not sock["connected"]:
+    if not sock["connected"] or sock["fd"] == -1:
         sock["last_error"] = "not connected"
         return 0
-    return len(str(data))
+    end
+    let bytes_sent = tcp.send(sock["fd"], str(data))
+    if bytes_sent == -1:
+        sock["last_error"] = "send failed"
+        return 0
+    end
+    return bytes_sent
 
 proc recv(sock, size):
-    if not sock["connected"]:
+    if not sock["connected"] or sock["fd"] == -1:
         return nil
-    return ""
+    end
+    let data = tcp.recv(sock["fd"], size)
+    if data == nil:
+        sock["connected"] = false
+        return nil
+    end
+    return data
 
 proc close(sock):
+    if sock["fd"] != -1:
+        tcp.close(sock["fd"])
+        sock["fd"] = -1
+    end
     sock["connected"] = false
-    sock["fd"] = -1
 
 # ============================================================================
 # TCP Transport (High-level)
@@ -83,12 +125,12 @@ proc frame_message(msg):
     let len_prefix = str(len(str_msg))
     while len(len_prefix) < 8:
         len_prefix = "0" + len_prefix
+    end
     return len_prefix + str_msg
 
 # Parse framed message (returns dict with len and data)
 proc parse_frame(buffer):
     let result = {}
-    # Find message boundary by reading length prefix
     if len(buffer) >= 8:
         let len_str = buffer[0:8]
         let msg_len = tonumber(len_str)
@@ -97,6 +139,8 @@ proc parse_frame(buffer):
             result["data"] = buffer[8:8 + msg_len]
             result["remaining"] = buffer[8 + msg_len:]
             return result
+        end
+    end
     result["ok"] = false
     result["remaining"] = buffer
     return result
@@ -116,12 +160,14 @@ proc write_buffer(buf, data):
     let str_data = str(data)
     if len(buf["data"]) + len(str_data) > buf["capacity"]:
         return false
+    end
     buf["data"] = buf["data"] + str_data
     return true
 
 proc read_buffer(buf, size):
     if len(buf["data"]) < size:
         return nil
+    end
     let result = buf["data"][buf["position"]:buf["position"] + size]
     buf["position"] = buf["position"] + size
     return result
@@ -129,6 +175,7 @@ proc read_buffer(buf, size):
 proc consume_buffer(buf, size):
     if len(buf["data"]) < buf["position"] + size:
         return nil
+    end
     let result = buf["data"][buf["position"]:buf["position"] + size]
     buf["position"] = buf["position"] + size
     return result
@@ -146,30 +193,33 @@ proc create_connection(node):
     conn["node"] = node
     conn["socket"] = nil
     conn["buffer"] = create_buffer(65536)
-    conn["state"] = NODE_STATE_DISCONNECTED
+    conn["state"] = 0 # NODE_STATE_DISCONNECTED
     conn["last_heartbeat"] = 0
     conn["heartbeat_interval"] = 1.0
     return conn
 
 proc open_connection(conn, host, port):
     conn["socket"] = create_tcp_client(host, port)
-    conn["state"] = NODE_STATE_CONNECTED
+    conn["state"] = 2 # NODE_STATE_CONNECTED
     return conn
 
 proc close_connection(conn):
     if conn["socket"] != nil:
         close(conn["socket"])
-    conn["state"] = NODE_STATE_DISCONNECTED
+    end
+    conn["state"] = 0 # NODE_STATE_DISCONNECTED
 
 proc send_message(conn, msg):
     if conn["socket"] == nil or not conn["socket"]["connected"]:
         return false
+    end
     let framed = frame_message(msg)
     return send(conn["socket"], framed) > 0
 
 proc recv_message(conn):
     if conn["socket"] == nil or not conn["socket"]["connected"]:
         return nil
+    end
     return recv(conn["socket"], 4096)
 
 proc ping(conn):
@@ -200,6 +250,7 @@ proc check_heartbeat(hb):
     if (clock() - hb["last_recv"]) > hb["timeout"]:
         hb["missed"] = hb["missed"] + 1
         return false
+    end
     return true
 
 # ============================================================================

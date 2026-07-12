@@ -6,6 +6,13 @@ A modular, mailbox-based protocol for multicore message passing implemented in p
 
 SageSMP provides a distributed messaging system inspired by Erlang-style mailboxes, designed for multi-node communication. It handles node discovery, message routing, and reliable delivery across a network of Sage nodes.
 
+## Real Multi-Node Networking
+
+The implementation has been fully migrated from simulated mocks to real network communication:
+- **Native TCP Sockets**: The transport layer (`smp.transport`) is fully wired to native OS sockets via Sage's `tcp` module, allowing separate nodes on different machines or processes to communicate over real TCP/IP connections.
+- **JSON Protocol Encoding**: Message serialization/deserialization uses Sage's standard `json` port, assuring full payload compatibility and correct routing of dynamic types.
+- **Base64-safe Cryptography**: The XOR cipher has been updated to use Base64 encoding to prevent null-byte (`chr(0)`) truncation and UTF-8 code point corruption when transmitting encrypted envelopes over socket buffers.
+
 ## Module Structure
 
 ```

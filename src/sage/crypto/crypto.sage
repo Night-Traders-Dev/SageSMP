@@ -10,23 +10,35 @@ import smp.smp_protocol as smp_protocol
 # Simple XOR cipher for message obfuscation
 # ============================================================================
 
+from crypto.encoding import b64_encode, b64_decode
+
 proc xor_encrypt(data, key):
     let key_bytes = []
     for i in range(len(str(key))):
         push(key_bytes, ord(str(key)[i]))
     end
     
-    let result = ""
+    let raw_xor = []
     let data_str = str(data)
     for i in range(len(data_str)):
         let key_idx = i % len(key_bytes)
-        let encrypted = chr(ord(data_str[i]) ^ key_bytes[key_idx])
-        result = result + encrypted
+        push(raw_xor, ord(data_str[i]) ^ key_bytes[key_idx])
     end
-    return result
+    return b64_encode(raw_xor)
 
 proc xor_decrypt(data, key):
-    return xor_encrypt(data, key)
+    let decoded_bytes = b64_decode(data)
+    let key_bytes = []
+    for i in range(len(str(key))):
+        push(key_bytes, ord(str(key)[i]))
+    end
+    
+    let result = ""
+    for i in range(len(decoded_bytes)):
+        let key_idx = i % len(key_bytes)
+        result = result + chr(decoded_bytes[i] ^ key_bytes[key_idx])
+    end
+    return result
 
 # ============================================================================
 # Simple checksum for message integrity

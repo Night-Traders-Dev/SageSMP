@@ -4,6 +4,8 @@
 
 gc_disable()
 
+from smp.core import NODE_STATE_DISCONNECTED, NODE_STATE_CONNECTING, NODE_STATE_CONNECTED, NODE_STATE_READY, NODE_STATE_ERROR, DEFAULT_MAX_NODES
+
 # ============================================================================
 # Node Identity
 # ============================================================================
