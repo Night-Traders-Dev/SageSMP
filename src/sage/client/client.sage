@@ -5,9 +5,10 @@
 gc_disable()
 
 import sys
-import smp.mailbox
-import smp.node
-import smp.smp_protocol
+import smp
+import smp.mailbox as smp_mailbox
+import smp.node as smp_node
+import smp.smp_protocol as smp_protocol
 import smp.transport as smp_transport
 
 class Client:
@@ -16,7 +17,7 @@ class Client:
         self.registry = registry_and_node[0]
         self.node = registry_and_node[1]
         self.connection = nil
-        self.mailbox = smp_mailbox.create_mailbox(self.node["id"], DEFAULT_MAILBOX_SIZE)
+        self.mailbox = smp_mailbox.create_mailbox(self.node["id"], smp.DEFAULT_MAILBOX_SIZE)
         self.node["mailbox"] = self.mailbox
         self.handlers = {}
         self.running = false
@@ -25,23 +26,24 @@ class Client:
     
     proc connect(self, target_host, target_port):
         self.connection = smp_transport.create_connection(self.node)
-        open_connection(self.connection, target_host, target_port)
+        smp_transport.open_connection(self.connection, target_host, target_port)
         
         let join_msg = smp_protocol.build_join(self.node["id"], {
             "name": self.node["name"],
             "capabilities": self.node["capabilities"]
         })
         
-        send_message(self.connection, join_msg)
+        smp_transport.send_message(self.connection, join_msg)
         smp_node.ready(self.registry, self.node)
         return true
     
     proc disconnect(self):
         if self.connection != nil:
             let leave_msg = smp_protocol.build_leave(self.node["id"])
-            send_message(self.connection, leave_msg)
-            close_connection(self.connection)
+            smp_transport.send_message(self.connection, leave_msg)
+            smp_transport.close_connection(self.connection)
             self.connection = nil
+        end
         
         smp_node.disconnect(self.registry, self.node)
         return true
@@ -49,13 +51,13 @@ class Client:
     proc send(self, target_id, payload):
         let msg = smp_protocol.build_data(self.node["id"], target_id, payload)
         let seq = smp_mailbox.send(self.mailbox, msg)
-        send_message(self.connection, msg)
-        record_sent(self.stats, len(str(payload)))
+        smp_transport.send_message(self.connection, msg)
+        smp_transport.record_sent(self.stats, len(str(payload)))
         return seq
     
     proc broadcast(self, payload):
         let msg = smp_protocol.build_broadcast(self.node["id"], payload)
-        send_message(self.connection, msg)
+        smp_transport.send_message(self.connection, msg)
         return true
     
     proc on(self, msg_type, handler):
@@ -84,7 +86,7 @@ class Client:
         if self.connection == nil:
             return nil
         
-        let raw = recv_message(self.connection)
+        let raw = smp_transport.recv_message(self.connection)
         if raw != nil:
             handle_message(self, raw)
         end
@@ -92,7 +94,7 @@ class Client:
         return raw
     
     proc process_mailbox(self):
-        process(self.mailbox)
+        smp_mailbox.process(self.mailbox)
     
     proc tick(self):
         poll(self)
@@ -100,7 +102,7 @@ class Client:
         
         if smp_transport.should_ping(self.connection, 1.0):
             let hb_msg = smp_protocol.build_heartbeat(self.node["id"], 0)
-            send_message(self.connection, hb_msg)
+            smp_transport.send_message(self.connection, hb_msg)
             smp_transport.ping(self.connection)
         end
     
@@ -113,7 +115,7 @@ class Client:
     
     proc stop(self):
         self.running = false
-        disconnect(self)
+        self.disconnect()
     
     proc get_stats(self):
         let s = {}
@@ -134,10 +136,10 @@ proc create_client(name, host, port):
 proc create_client_from_env(name):
     let host = sys.getenv("SMP_HOST")
     if host == nil:
-        host = DEFAULT_HOST
+        host = smp.DEFAULT_HOST
     end
     let port_str = sys.getenv("SMP_PORT")
-    let port = DEFAULT_PORT
+    let port = smp.DEFAULT_PORT
     if port_str != nil:
         port = tonumber(port_str)
     end
@@ -150,10 +152,10 @@ proc create_client_from_env(name):
 proc sync_state(client, target_id, state_data):
     let msg = smp_protocol.build_sync(client.node["id"], target_id, state_data)
     smp_mailbox.send(client.mailbox, msg)
-    send_message(client.connection, msg)
+    smp_transport.send_message(client.connection, msg)
     return true
 
 proc request_sync(client, target_id):
     let msg = smp_protocol.build_sync(client.node["id"], target_id, nil)
-    send_message(client.connection, msg)
+    smp_transport.send_message(client.connection, msg)
     return true

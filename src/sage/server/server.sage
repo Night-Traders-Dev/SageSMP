@@ -6,10 +6,10 @@ gc_disable()
 
 import sys
 import smp
-import smp.mailbox
-import smp.node
-import smp.smp_protocol
-import smp.transport
+import smp.mailbox as smp_mailbox
+import smp.node as smp_node
+import smp.smp_protocol as smp_protocol
+import smp.transport as smp_transport
 
 let SMP_OP_HEARTBEAT = smp.SMP_OP_HEARTBEAT
 let SMP_OP_MESSAGE = smp.SMP_OP_MESSAGE
@@ -23,20 +23,20 @@ class Server:
         let registry_and_node = smp_node.create_local_node(name, host, port)
         self.registry = registry_and_node[0]
         self.node = registry_and_node[1]
-        self.server_socket = create_tcp_server(port)
+        self.server_socket = smp_transport.create_tcp_server(port)
         self.mailboxes = {}
         self.clients = {}
         self.handlers = {}
         self.running = false
         self.heartbeat_interval = 1.0
-        self.max_clients = DEFAULT_MAX_NODES
+        self.max_clients = smp.DEFAULT_MAX_NODES
     
     proc start(self):
         self.running = true
         print("SMP Server starting on " + self.node["host"] + ":" + str(self.node["port"]))
         
         while self.running:
-            let client = accept(self.server_socket)
+            let client = smp_transport.accept(self.server_socket)
             if client != nil:
                 handle_client(self, client)
             end
@@ -45,11 +45,11 @@ class Server:
     
     proc stop(self):
         self.running = false
-        close(self.server_socket)
+        smp_transport.close(self.server_socket)
     
     proc handle_client(self, client):
         while client["connected"]:
-            let raw = recv_message(client)
+            let raw = smp_transport.recv_message(client)
             if raw != nil:
                 handle_message(self, client, raw)
             end
@@ -137,7 +137,7 @@ class Server:
         
         if dict_has(self.clients, str(target_id)):
             let client = self.clients[str(target_id)]
-            send_message(client, msg)
+            smp_transport.send_message(client, msg)
         end
     
     proc broadcast(self, payload):
@@ -146,7 +146,7 @@ class Server:
         let client_ids = dict_keys(self.clients)
         for i in range(len(client_ids)):
             let client = self.clients[client_ids[i]]
-            send_message(client, msg)
+            smp_transport.send_message(client, msg)
         end
     
     proc on(self, event, handler):
@@ -218,7 +218,7 @@ proc broadcast_to_all(server, payload):
     let client_ids = dict_keys(server.clients)
     for i in range(len(client_ids)):
         let client = server.clients[client_ids[i]]
-        send_message(client, msg)
+        smp_transport.send_message(client, msg)
     end
 
 proc send_to_node(server, node_id, payload):
@@ -231,5 +231,5 @@ proc send_to_node(server, node_id, payload):
     
     if dict_has(server.clients, str(node_id)):
         let client = server.clients[str(node_id)]
-        send_message(client, msg)
+        smp_transport.send_message(client, msg)
     end
