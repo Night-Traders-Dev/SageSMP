@@ -38,7 +38,7 @@ class Server:
         while self.running:
             let client = smp_transport.accept(self.server_socket)
             if client != nil:
-                handle_client(self, client)
+                self.handle_client(client)
             end
             sys.sleep(10)
         end
@@ -58,15 +58,15 @@ class Server:
         let msg = smp_protocol.decode(raw_msg)
         
         if msg["op"] == SMP_OP_JOIN:
-            handle_join(self, client, msg)
+            self.handle_join(client, msg)
         elif msg["op"] == SMP_OP_LEAVE:
-            handle_leave(self, client, msg)
+            self.handle_leave(client, msg)
         elif msg["op"] == SMP_OP_MESSAGE:
-            handle_message_data(self, client, msg)
+            self.handle_message_data(client, msg)
         elif msg["op"] == SMP_OP_MAILBOX:
-            handle_mailbox(self, client, msg)
+            self.handle_mailbox(client, msg)
         elif msg["op"] == SMP_OP_HEARTBEAT:
-            update_heartbeat(self, msg["sender"])
+            self.update_heartbeat(msg["sender"])
         end
     
     proc handle_join(self, client, msg):

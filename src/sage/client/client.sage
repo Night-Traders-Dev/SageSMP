@@ -97,8 +97,8 @@ class Client:
         smp_mailbox.process(self.mailbox)
     
     proc tick(self):
-        poll(self)
-        process_mailbox(self)
+        self.poll()
+        self.process_mailbox()
         
         if smp_transport.should_ping(self.connection, 1.0):
             let hb_msg = smp_protocol.build_heartbeat(self.node["id"], 0)
