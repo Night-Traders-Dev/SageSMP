@@ -5,13 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SageSMP Cluster Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .heartbeat-pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .node-card { transition: border-color 0.5s; }
+  .log-entry { animation: fadeIn 0.3s ease-in; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .conn-line { stroke-dasharray: 8 4; animation: dash 1s linear infinite; }
+  @keyframes dash {
+    to { stroke-dashoffset: -24; }
+  }
+  .hb-active { stroke: #22c55e !important; stroke-width: 3 !important; }
+</style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
 <div class="container mx-auto p-4 max-w-6xl">
   <header class="flex flex-wrap justify-between items-center mb-6 gap-2">
     <div>
       <h1 class="text-2xl font-bold">SageSMP Cluster Dashboard</h1>
-      <p class="text-sm text-gray-400">Real-time monitoring: OrangePi &rarr; RPi2 &rarr; RPi4</p>
+      <p class="text-sm text-gray-400">60-second heartbeat: OrangePi relay &harr; RPi2 &amp; RPi4 clients</p>
     </div>
     <div class="flex gap-2">
       <button id="btn-start" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-semibold transition">Start All</button>
@@ -19,25 +39,62 @@
     </div>
   </header>
 
+  <!-- Heartbeat topology diagram -->
+  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="text-lg font-semibold">Cluster Topology</h2>
+      <span id="hb-clock" class="text-xs text-gray-500">Last heartbeat: --</span>
+    </div>
+    <svg viewBox="0 0 600 120" class="w-full max-w-2xl mx-auto">
+      <!-- OrangePi (center) -->
+      <circle id="node-relay" cx="300" cy="60" r="28" fill="#1e293b" stroke="#22c55e" stroke-width="3"/>
+      <text x="300" y="56" text-anchor="middle" fill="#e2e8f0" font-size="10" font-weight="bold">OrangePi</text>
+      <text x="300" y="70" text-anchor="middle" fill="#94a3b8" font-size="8">Relay:42000</text>
+
+      <!-- RPi2 (left) -->
+      <circle id="node-pi2" cx="110" cy="60" r="22" fill="#1e293b" stroke="#3b82f6" stroke-width="3"/>
+      <text x="110" y="57" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">RPi2</text>
+      <text x="110" y="69" text-anchor="middle" fill="#94a3b8" font-size="7">10.42.1.109</text>
+
+      <!-- RPi4 (right) -->
+      <circle id="node-pi4" cx="490" cy="60" r="22" fill="#1e293b" stroke="#a855f7" stroke-width="3"/>
+      <text x="490" y="57" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">RPi4</text>
+      <text x="490" y="69" text-anchor="middle" fill="#94a3b8" font-size="7">10.42.0.141</text>
+
+      <!-- Connection lines -->
+      <line id="conn-pi2" x1="138" y1="60" x2="272" y2="60" stroke="#475569" stroke-width="2" class="conn-line"/>
+      <line id="conn-pi4" x1="328" y1="60" x2="468" y2="60" stroke="#475569" stroke-width="2" class="conn-line"/>
+
+      <!-- Heartbeat indicators -->
+      <circle id="hb-pi2" cx="205" cy="60" r="5" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
+      <circle id="hb-pi4" cx="395" cy="60" r="5" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
+    </svg>
+    <div class="flex justify-center gap-6 mt-2 text-xs">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi2"></span>RPi2 <span id="hb-time-pi2" class="text-gray-500">never</span></span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi4"></span>RPi4 <span id="hb-time-pi4" class="text-gray-500">never</span></span>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-    <div id="card-relay" class="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
+    <div id="card-relay" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
       <div class="flex justify-between items-start">
         <h2 class="text-lg font-semibold">OrangePi Relay</h2>
         <span id="badge-relay" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
       <p class="text-sm text-gray-400 mt-1">Central relay on 0.0.0.0:42000</p>
-      <div class="mt-2 text-sm space-y-0.5">
+      <div id="telem-relay" class="mt-2 text-sm text-gray-400">Connected clients: 0</div>
+      <div class="mt-1 text-sm space-y-0.5">
         <p>PID: <span id="pid-relay" class="text-gray-400">-</span></p>
         <p>Logs: <span id="logcount-relay" class="text-gray-400">0</span></p>
       </div>
     </div>
 
-    <div id="card-pi2" class="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
+    <div id="card-pi2" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
       <div class="flex justify-between items-start">
         <h2 class="text-lg font-semibold">RPi2 Client</h2>
         <span id="badge-pi2" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
-      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.1.10:42000</p>
+      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.254.44:42000</p>
       <div id="telem-pi2" class="mt-2 text-sm text-gray-400">Waiting...</div>
       <div class="mt-1 text-sm space-y-0.5">
         <p>PID: <span id="pid-pi2" class="text-gray-400">-</span></p>
@@ -45,12 +102,12 @@
       </div>
     </div>
 
-    <div id="card-pi4" class="bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
+    <div id="card-pi4" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
       <div class="flex justify-between items-start">
         <h2 class="text-lg font-semibold">RPi4 Client</h2>
         <span id="badge-pi4" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
-      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.1.10:42000</p>
+      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.254.44:42000</p>
       <div id="telem-pi4" class="mt-2 text-sm text-gray-400">Waiting...</div>
       <div class="mt-1 text-sm space-y-0.5">
         <p>PID: <span id="pid-pi4" class="text-gray-400">-</span></p>
@@ -59,20 +116,21 @@
     </div>
   </div>
 
-  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
-    <div class="flex justify-between items-center mb-2">
-      <h2 class="text-lg font-semibold">Message Flow</h2>
-      <button id="btn-clear-logs" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-lg font-semibold">Live Log</h2>
+        <button id="btn-clear-logs" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+      </div>
+      <div id="log-container" class="bg-gray-950 rounded p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
     </div>
-    <div id="log-container" class="bg-gray-950 rounded p-3 h-80 overflow-y-auto font-mono text-xs leading-relaxed"></div>
-  </div>
-
-  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-    <div class="flex justify-between items-center mb-2">
-      <h2 class="text-lg font-semibold">Event History</h2>
-      <button id="btn-clear-events" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-lg font-semibold">Event History</h2>
+        <button id="btn-clear-events" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+      </div>
+      <div id="event-container" class="bg-gray-950 rounded p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
     </div>
-    <div id="event-container" class="bg-gray-950 rounded p-3 h-40 overflow-y-auto font-mono text-xs leading-relaxed"></div>
   </div>
 </div>
 
@@ -82,11 +140,18 @@ const eventContainer = document.getElementById('event-container');
 const badgeEls = {relay: document.getElementById('badge-relay'), pi2: document.getElementById('badge-pi2'), pi4: document.getElementById('badge-pi4')};
 const pidEls = {relay: document.getElementById('pid-relay'), pi2: document.getElementById('pid-pi2'), pi4: document.getElementById('pid-pi4')};
 const logcountEls = {relay: document.getElementById('logcount-relay'), pi2: document.getElementById('logcount-pi2'), pi4: document.getElementById('logcount-pi4')};
-const telemEls = {pi2: document.getElementById('telem-pi2'), pi4: document.getElementById('telem-pi4')};
+const telemEls = {relay: document.getElementById('telem-relay'), pi2: document.getElementById('telem-pi2'), pi4: document.getElementById('telem-pi4')};
+const hbPulse = {pi2: document.getElementById('hb-pi2'), pi4: document.getElementById('hb-pi4')};
+const hbTime = {pi2: document.getElementById('hb-time-pi2'), pi4: document.getElementById('hb-time-pi4')};
+const indicators = {pi2: document.getElementById('indicator-pi2'), pi4: document.getElementById('indicator-pi4')};
+const nodeSvg = {pi2: document.getElementById('node-pi2'), pi4: document.getElementById('node-pi4')};
+const connLines = {pi2: document.getElementById('conn-pi2'), pi4: document.getElementById('conn-pi4')};
 
 const colorMap = {relay: 'text-green-400', pi2: 'text-blue-400', pi4: 'text-purple-400', dashboard: 'text-yellow-300'};
 const prefixMap = {relay: '[OrangePi]', pi2: '[RPi2]', pi4: '[RPi4]', dashboard: '[System]'};
-const typeColors = {system: 'text-yellow-300', message: 'text-cyan-300', join_leave: 'text-lime-300', broadcast: 'text-pink-300', error: 'text-red-400'};
+const typeColors = {system: 'text-yellow-300', heartbeat: 'text-green-300', heartbeat_ack: 'text-cyan-300', status: 'text-lime-300', warning: 'text-yellow-300', error: 'text-red-400'};
+
+let lastHearbeatTimes = {};
 
 function badgeClass(status) {
   if (status === 'running') return 'bg-green-600';
@@ -97,21 +162,65 @@ function badgeClass(status) {
 function appendLine(container, source, text, extraClass) {
   if (!text) return;
   const div = document.createElement('div');
-  div.className = (colorMap[source] || 'text-gray-300') + ' ' + (extraClass || '');
+  div.className = (colorMap[source] || 'text-gray-300') + ' ' + (extraClass || '') + ' log-entry';
   div.textContent = (prefixMap[source] || '[' + source + ']') + ' ' + text;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
+  if (container.children.length > 500) container.removeChild(container.firstChild);
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString();
+}
+
+function flashHeartbeat(name) {
+  const pulse = hbPulse[name];
+  if (pulse) {
+    pulse.setAttribute('opacity', '1');
+    setTimeout(() => pulse.setAttribute('opacity', '0'), 2000);
+  }
+  const indicator = indicators[name];
+  if (indicator) {
+    indicator.classList.add('heartbeat-pulse');
+    setTimeout(() => indicator.classList.remove('heartbeat-pulse'), 2000);
+  }
+  const conn = connLines[name];
+  if (conn) {
+    conn.classList.add('hb-active');
+    setTimeout(() => conn.classList.remove('hb-active'), 2000);
+  }
+  const svgNode = nodeSvg[name];
+  if (svgNode) {
+    const orig = svgNode.getAttribute('stroke');
+    svgNode.setAttribute('stroke', '#22c55e');
+    setTimeout(() => svgNode.setAttribute('stroke', orig || '#3b82f6'), 2000);
+  }
+  const now = Date.now();
+  lastHearbeatTimes[name] = now;
+  if (hbTime[name]) hbTime[name].textContent = formatTime(now);
+  document.getElementById('hb-clock').textContent = 'Last heartbeat: ' + formatTime(now);
 }
 
 function renderTelemetry(name, data) {
   const el = telemEls[name];
-  if (!el || !data) return;
+  if (!el) return;
+  if (name === 'relay') {
+    if (data && data.node_count !== undefined) {
+      el.textContent = 'Connected clients: ' + data.node_count;
+    }
+    return;
+  }
+  if (!data || Object.keys(data).length === 0) {
+    el.textContent = 'Waiting...';
+    return;
+  }
   const parts = [];
-  if (data.temp) parts.push('Temp: ' + data.temp + 'C');
-  if (data.load) parts.push('Load: ' + data.load);
-  if (data.memory) parts.push('Mem: ' + data.memory);
-  if (data.gpu_temp) parts.push('GPU: ' + data.gpu_temp + 'C');
-  if (data.throttling) parts.push('Throttle: ' + data.throttling);
+  if (data.temp !== undefined) parts.push('Temp: ' + data.temp + 'C');
+  if (data.load !== undefined) parts.push('Load: ' + data.load);
+  if (data.memory !== undefined) parts.push('Mem: ' + data.memory);
+  if (data.gpu_temp !== undefined) parts.push('GPU: ' + data.gpu_temp + 'C');
+  if (data.throttling !== undefined) parts.push(data.throttling);
   el.textContent = parts.length ? parts.join(' | ') : 'No telemetry yet';
 }
 
@@ -126,10 +235,17 @@ evtSource.onmessage = function(e) {
     }
     for (const line of nd.new_logs) {
       appendLine(logContainer, name, line);
+      if (line.includes('[HEARTBEAT OK]')) {
+        flashHeartbeat(name);
+      }
     }
   }
   for (const evt of data.events) {
     appendLine(eventContainer, evt.source, evt.message, typeColors[evt.type] || '');
+    if (evt.type === 'heartbeat' || evt.type === 'heartbeat_ack') {
+      const name = evt.source === 'relay' ? null : evt.source;
+      if (name) flashHeartbeat(name);
+    }
   }
   if (data.telemetry) {
     for (const [name, telem] of Object.entries(data.telemetry)) {
@@ -138,7 +254,7 @@ evtSource.onmessage = function(e) {
   }
 };
 evtSource.onerror = function() {
-  appendLine(logContainer, 'dashboard', 'Stream connection lost, retrying...', 'text-red-400');
+  appendLine(logContainer, 'dashboard', 'Stream disconnected, retrying...', 'text-red-400');
 };
 
 document.getElementById('btn-start').onclick = function() { fetch('/api/start', {method: 'POST'}); };

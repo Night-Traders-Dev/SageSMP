@@ -5,7 +5,7 @@ import thread
 import sys
 import io
 
-let ORANGEPI_HOST = "192.168.1.10"
+let ORANGEPI_HOST = "192.168.254.44"
 let ORANGEPI_PORT = 42000
 let CLIENT_ID = 1
 let HEARTBEAT_INTERVAL = 60

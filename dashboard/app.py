@@ -19,6 +19,7 @@ SAGEMAP_DIR = Path.home() / "SageSMP"
 BIN_DIR = SAGEMAP_DIR / "bin"
 MAX_LOGS = 1000
 MAX_EVENTS = 500
+HEARTBEAT_INTERVAL_S = 65
 
 state = {
     "relay": {"name": "OrangePi Relay", "proc": None, "logs": [], "status": "stopped", "started_at": None},
@@ -40,26 +41,35 @@ def add_log(node_name, line):
         state[node_name]["logs"] = state[node_name]["logs"][-MAX_LOGS:]
 
 def parse_telemetry(node_name, line):
-    if "Temp:" in line:
-        try:
-            parts = line.split(",")
-            info = {}
-            for p in parts:
-                p = p.strip()
-                if "Temp:" in p:
-                    info["temp"] = p.split(":")[1].strip().rstrip("C")
-                elif "Load:" in p:
-                    info["load"] = p.split(":")[1].strip()
-                elif "Available:" in p:
-                    info["memory"] = p.split(":")[1].strip()
-                elif "GPU:" in p:
-                    info["gpu_temp"] = p.split(":")[1].strip().rstrip("C")
-                elif "Throttling:" in p:
-                    info["throttling"] = p.split(":")[1].strip()
-            if info:
-                state["telemetry"][node_name] = info
-        except Exception:
-            pass
+    try:
+        if "HEARTBEAT OK" in line:
+            if "nodes=" in line:
+                import re
+                m = re.search(r'nodes=(\d+)', line)
+                if m:
+                    state["telemetry"]["relay"] = {"node_count": int(m.group(1))}
+            return
+        info = {}
+        if "->" in line:
+            data_part = line.split("->")[-1].strip()
+        else:
+            data_part = line
+        for part in data_part.split(","):
+            part = part.strip()
+            if "Temp:" in part:
+                info["temp"] = part.split(":")[-1].strip().rstrip("C")
+            elif "Load:" in part:
+                info["load"] = part.split(":")[-1].strip()
+            elif "Available:" in part:
+                info["memory"] = "Available:" + part.split(":")[-1].strip()
+            elif "GPU:" in part:
+                info["gpu_temp"] = part.split(":")[-1].strip().rstrip("C")
+            elif part in ("OK", "THROTTLED"):
+                info["throttling"] = part
+        if info and node_name in ("pi2", "pi4"):
+            state["telemetry"][node_name] = info
+    except Exception:
+        pass
 
 async def stream_reader(stream, node_name):
     while True:
@@ -70,16 +80,18 @@ async def stream_reader(stream, node_name):
         if not line:
             continue
         add_log(node_name, line)
-        if "Sending to OrangePi:" in line or "Received info from client" in line:
-            add_event("message", node_name, line)
+        if "[HEARTBEAT] " in line:
+            add_event("heartbeat", node_name, line)
             parse_telemetry(node_name, line)
-        elif "Registered client" in line or "Unregistered client" in line:
-            add_event("join_leave", node_name, line)
+        elif "[HEARTBEAT OK]" in line:
+            add_event("heartbeat_ack", node_name, line)
             parse_telemetry(node_name, line)
-        elif "Broadcasting" in line or "Received broadcast" in line:
-            add_event("broadcast", node_name, line)
-        elif "Connected clients:" in line or "=== " in line:
-            pass
+        elif "[ERROR]" in line:
+            add_event("error", node_name, line)
+        elif "[WARN]" in line:
+            add_event("warning", node_name, line)
+        elif "=== " in line and "Status" in line:
+            add_event("status", node_name, line)
 
 async def start_node(node_name, cmd, cwd=None):
     n = state[node_name]
@@ -168,15 +180,12 @@ async def get_events():
 
 @app.post("/api/start")
 async def start_all():
-    relay_bin = BIN_DIR / "orangepi_relay"
-    if relay_bin.exists():
-        await start_node("relay", [str(relay_bin)], cwd=str(SAGEMAP_DIR))
-    else:
-        add_event("error", "dashboard", "orangepi_relay binary not found")
-    await asyncio.sleep(0.3)
-    await start_node("pi2", ["ssh", "pi2", "cd ~/SageSMP && exec ./bin/rpi2_client"])
-    await asyncio.sleep(0.3)
-    await start_node("pi4", ["ssh", "pi4", "cd ~/SageSMP && exec ./bin/rpi4_client"])
+    sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
+    await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR))
+    await asyncio.sleep(0.5)
+    await start_node("pi2", ["ssh", "pi2", "cd ~/SageSMP && exec env SMP_HOST=192.168.254.44 stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+    await asyncio.sleep(0.5)
+    await start_node("pi4", ["ssh", "pi4", "cd ~/SageSMP && exec env SMP_HOST=192.168.254.44 stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
     return {"status": "ok"}
 
 @app.post("/api/stop")
