@@ -2,6 +2,7 @@
 gc_disable()
 
 import sys
+import io
 import smp.client as smp_client
 
 let name = "RPi-Client"
@@ -24,6 +25,9 @@ print "=== Starting Real SMP Client: " + name + " ==="
 let client = smp_client.create_client(name, "127.0.0.1", 42001)
 print "My Node ID: " + str(client.node["id"])
 
+# Write Node ID to a file in the home directory
+io.writefile(sys.getenv("HOME") + "/node_id", str(client.node["id"]))
+
 # Connect to OrangePi server
 print "Connecting to server at " + server_ip + ":42000..."
 client.connect(server_ip, 42000)
@@ -35,7 +39,7 @@ end)
 
 # Loop and poll for messages
 let count = 0
-while count < 15:
+while count < 30:
     count = count + 1
     sys.sleep(1000) # Sleep 1 second
     client.poll()
