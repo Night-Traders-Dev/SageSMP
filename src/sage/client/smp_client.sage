@@ -744,7 +744,7 @@ proc _auto_relay_check(sender_id, plaintext):
     for i in range(len(relay_rules)):
         let r = relay_rules[i]
         if r["type"] == "deleted":
-            # skip
+            let skip = true
         elif r["type"] == "sender":
             if r["trigger"] == sender_id:
                 print("[Relay] Rule [" + str(i) + "] matched sender node-" +
@@ -1154,7 +1154,7 @@ proc run_router_shell():
 
         let line = input("router[tick=" + str(rtos_tick) + "]> ")
         if line == nil or len(str(line)) == 0:
-            # continue
+            let skip = true
         else:
             let parts = split(str(line), " ")
             let clean = []
@@ -1197,7 +1197,7 @@ proc run_client_shell():
             id_label = "[node-" + str(session["my_id"]) + "] "
         let line = input("smp-tick=" + str(rtos_tick - 1) + " " + id_label + "> ")
         if line == nil or len(str(line)) == 0:
-            # continue
+            let skip = true
         else:
             let parts = split(str(line), " ")
             let clean = []

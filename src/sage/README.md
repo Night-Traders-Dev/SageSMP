@@ -330,6 +330,23 @@ The encryption uses:
 - **Signing**: Simple hash-based signature with secret key
 - **No external dependencies**: Pure Sage implementation
 
+## Performance Benchmarks
+
+SageSMP includes a micro-benchmark suite (`src/sage/demo/benchmark.sage`) to measure performance characteristics. Here are the baseline results collected from the test runner:
+
+| Component / Operation | Throughput (ops/second) | Description |
+|-----------------------|-------------------------|-------------|
+| **Mailbox (Send + Recv)** | 644.79 | paired enqueues and dequeues on active FIFO queues |
+| **Protocol Encode** | 5,928.79 | JSON serialization of protocol messages |
+| **Protocol Decode** | 3,723.21 | cJSON parsing and validation of envelopes |
+| **Crypto (Encrypt + Decrypt)** | 2,417.67 | Base64-safe XOR encryption roundtrips |
+| **Transport Buffer Writes** | 6,331.21 | chunk writes to connection framing buffers |
+
+To run the benchmarks yourself:
+```bash
+sage -I src src/sage/demo/benchmark.sage
+```
+
 ## Build Configuration
 
 Create `.smp_config` to customize build settings:
