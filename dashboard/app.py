@@ -4,6 +4,7 @@
 import asyncio
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -17,9 +18,36 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 SAGEMAP_DIR = Path.home() / "SageSMP"
 BIN_DIR = SAGEMAP_DIR / "bin"
+LOG_DIR = SAGEMAP_DIR / "logs"
 MAX_LOGS = 1000
 MAX_EVENTS = 500
-HEARTBEAT_INTERVAL_S = 65
+MAX_SERVICE_LOG = 10000
+
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+SERVICE_LOG_FILE = LOG_DIR / "service_log.jsonl"
+
+def load_service_log():
+    if not SERVICE_LOG_FILE.exists():
+        return []
+    entries = []
+    with open(SERVICE_LOG_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    return entries[-MAX_SERVICE_LOG:]
+
+def append_service_log(entry):
+    entries = load_service_log()
+    entries.append(entry)
+    if len(entries) > MAX_SERVICE_LOG:
+        entries = entries[-MAX_SERVICE_LOG:]
+    with open(SERVICE_LOG_FILE, "w") as f:
+        for e in entries:
+            f.write(json.dumps(e) + "\n")
 
 state = {
     "relay": {"name": "OrangePi Relay", "proc": None, "logs": [], "status": "stopped", "started_at": None},
@@ -27,6 +55,8 @@ state = {
     "pi4": {"name": "RPi4 Client", "proc": None, "logs": [], "status": "stopped", "started_at": None},
     "events": [],
     "telemetry": {"pi2": {}, "pi4": {}},
+    "services": {"pi2": {}, "pi4": {}},
+    "compiles": [],
 }
 
 def add_event(typ, source, message):
@@ -43,11 +73,9 @@ def add_log(node_name, line):
 def parse_telemetry(node_name, line):
     try:
         if "HEARTBEAT OK" in line:
-            if "nodes=" in line:
-                import re
-                m = re.search(r'nodes=(\d+)', line)
-                if m:
-                    state["telemetry"]["relay"] = {"node_count": int(m.group(1))}
+            m = re.search(r'nodes=(\d+)', line)
+            if m:
+                state["telemetry"]["relay"] = {"node_count": int(m.group(1))}
             return
         info = {}
         if "->" in line:
@@ -71,6 +99,33 @@ def parse_telemetry(node_name, line):
     except Exception:
         pass
 
+def parse_service_line(node_name, line):
+    try:
+        # [SERVICES] RPi2 -> {"pihole_active":"active",...}
+        # [COMPILE] RPi4 -> {"status":"ok",...}
+        m = re.match(r'\[(SERVICES|COMPILE)\]\s+(\S+)\s+->\s+(.*)', line)
+        if not m:
+            return
+        entry_type = m.group(1)
+        platform = m.group(2)
+        data_str = m.group(3)
+        data = json.loads(data_str)
+        ts = datetime.now().isoformat()
+        log_entry = {"type": entry_type, "platform": platform, "data": data, "timestamp": ts}
+        append_service_log(log_entry)
+        if entry_type == "SERVICES":
+            node_key = "pi2" if "RPi2" in platform else "pi4"
+            state["services"][node_key] = data
+            add_event("services", node_key, f"{platform} services: {data_str[:120]}")
+        elif entry_type == "COMPILE":
+            state["compiles"].append({"platform": platform, "data": data, "timestamp": ts})
+            if len(state["compiles"]) > 50:
+                state["compiles"] = state["compiles"][-50:]
+            status = data.get("status", "?")
+            add_event("compile", "pi4", f"Cross-compile {status} (exit={data.get('exit_code','?')})")
+    except Exception:
+        pass
+
 async def stream_reader(stream, node_name):
     while True:
         line = await stream.readline()
@@ -86,6 +141,11 @@ async def stream_reader(stream, node_name):
         elif "[HEARTBEAT OK]" in line:
             add_event("heartbeat_ack", node_name, line)
             parse_telemetry(node_name, line)
+        elif "[SERVICES]" in line:
+            parse_service_line(node_name, line)
+        elif "[COMPILE]" in line:
+            add_event("compile", "pi4", f"Cross-compile output received")
+            parse_service_line(node_name, line)
         elif "[ERROR]" in line:
             add_event("error", node_name, line)
         elif "[WARN]" in line:
@@ -159,7 +219,18 @@ async def get_status():
             "pid": state["pi4"]["proc"].pid if state["pi4"]["proc"] and state["pi4"]["proc"].returncode is None else None,
         },
         "telemetry": state["telemetry"],
+        "services": state["services"],
+        "compiles": state["compiles"][-5:],
     }
+
+@app.get("/api/service-log")
+async def get_service_log(limit: int = 100):
+    entries = load_service_log()
+    return entries[-limit:]
+
+@app.get("/api/compiles")
+async def get_compiles():
+    return state["compiles"]
 
 @app.get("/api/logs")
 async def get_logs(source: str = "all"):
@@ -213,6 +284,8 @@ async def stream():
             last_events = len(state["events"])
             data["events"] = [{"source": e["source"], "message": e["message"], "type": e["type"]} for e in new_events[-5:]]
             data["telemetry"] = state["telemetry"]
+            data["services"] = state["services"]
+            data["compiles"] = state["compiles"][-3:]
             yield f"data: {json.dumps(data)}\n\n"
             await asyncio.sleep(0.3)
     return StreamingResponse(event_generator(), media_type="text/event-stream")

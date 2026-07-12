@@ -6,286 +6,303 @@
 <title>SageSMP Cluster Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  .heartbeat-pulse {
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-  .node-card { transition: border-color 0.5s; }
-  .log-entry { animation: fadeIn 0.3s ease-in; }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .conn-line { stroke-dasharray: 8 4; animation: dash 1s linear infinite; }
-  @keyframes dash {
-    to { stroke-dashoffset: -24; }
-  }
-  .hb-active { stroke: #22c55e !important; stroke-width: 3 !important; }
+  .heartbeat-pulse { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .conn-line { stroke-dasharray:8 4; animation:dash 1s linear infinite; }
+  @keyframes dash { to{stroke-dashoffset:-24} }
+  .hb-active { stroke:#22c55e !important; stroke-width:3 !important; }
+  .log-entry { animation:fadeIn .3s ease-in; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .service-card { min-height:100px; }
+  @media(max-width:640px){ .log-entry{font-size:10px} }
 </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
-<div class="container mx-auto p-4 max-w-6xl">
-  <header class="flex flex-wrap justify-between items-center mb-6 gap-2">
+<div class="container mx-auto p-2 sm:p-4 max-w-6xl">
+
+  <header class="flex flex-wrap justify-between items-center mb-4 gap-2">
     <div>
-      <h1 class="text-2xl font-bold">SageSMP Cluster Dashboard</h1>
-      <p class="text-sm text-gray-400">60-second heartbeat: OrangePi relay &harr; RPi2 &amp; RPi4 clients</p>
+      <h1 class="text-xl sm:text-2xl font-bold">SageSMP Cluster</h1>
+      <p class="text-xs sm:text-sm text-gray-400">60s heartbeat &sdot; Pi-hole &sdot; Grafana &sdot; Prometheus</p>
     </div>
     <div class="flex gap-2">
-      <button id="btn-start" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-semibold transition">Start All</button>
-      <button id="btn-stop" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold transition">Stop All</button>
+      <button id="btn-start" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 hover:bg-green-700 rounded font-semibold text-sm transition">Start</button>
+      <button id="btn-stop" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-700 rounded font-semibold text-sm transition">Stop</button>
     </div>
   </header>
 
-  <!-- Heartbeat topology diagram -->
-  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
-    <div class="flex justify-between items-center mb-3">
-      <h2 class="text-lg font-semibold">Cluster Topology</h2>
-      <span id="hb-clock" class="text-xs text-gray-500">Last heartbeat: --</span>
+  <!-- Topology (hidden on very small) -->
+  <div class="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700 mb-4 hidden sm:block">
+    <div class="flex justify-between items-center mb-2">
+      <h2 class="text-base sm:text-lg font-semibold">Topology</h2>
+      <span id="hb-clock" class="text-xs text-gray-500">Last: --</span>
     </div>
-    <svg viewBox="0 0 600 120" class="w-full max-w-2xl mx-auto">
-      <!-- OrangePi (center) -->
-      <circle id="node-relay" cx="300" cy="60" r="28" fill="#1e293b" stroke="#22c55e" stroke-width="3"/>
-      <text x="300" y="56" text-anchor="middle" fill="#e2e8f0" font-size="10" font-weight="bold">OrangePi</text>
-      <text x="300" y="70" text-anchor="middle" fill="#94a3b8" font-size="8">Relay:42000</text>
-
-      <!-- RPi2 (left) -->
-      <circle id="node-pi2" cx="110" cy="60" r="22" fill="#1e293b" stroke="#3b82f6" stroke-width="3"/>
-      <text x="110" y="57" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">RPi2</text>
-      <text x="110" y="69" text-anchor="middle" fill="#94a3b8" font-size="7">10.42.1.109</text>
-
-      <!-- RPi4 (right) -->
-      <circle id="node-pi4" cx="490" cy="60" r="22" fill="#1e293b" stroke="#a855f7" stroke-width="3"/>
-      <text x="490" y="57" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">RPi4</text>
-      <text x="490" y="69" text-anchor="middle" fill="#94a3b8" font-size="7">10.42.0.141</text>
-
-      <!-- Connection lines -->
-      <line id="conn-pi2" x1="138" y1="60" x2="272" y2="60" stroke="#475569" stroke-width="2" class="conn-line"/>
-      <line id="conn-pi4" x1="328" y1="60" x2="468" y2="60" stroke="#475569" stroke-width="2" class="conn-line"/>
-
-      <!-- Heartbeat indicators -->
-      <circle id="hb-pi2" cx="205" cy="60" r="5" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
-      <circle id="hb-pi4" cx="395" cy="60" r="5" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
+    <svg viewBox="0 0 600 100" class="w-full max-w-lg mx-auto">
+      <circle id="node-relay" cx="300" cy="50" r="24" fill="#1e293b" stroke="#22c55e" stroke-width="3"/>
+      <text x="300" y="46" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">OrangePi</text>
+      <text x="300" y="58" text-anchor="middle" fill="#94a3b8" font-size="7">Relay:42000</text>
+      <circle id="node-pi2" cx="110" cy="50" r="20" fill="#1e293b" stroke="#3b82f6" stroke-width="3"/>
+      <text x="110" y="47" text-anchor="middle" fill="#e2e8f0" font-size="8" font-weight="bold">RPi2</text>
+      <text x="110" y="57" text-anchor="middle" fill="#94a3b8" font-size="6">Pi-hole</text>
+      <circle id="node-pi4" cx="490" cy="50" r="20" fill="#1e293b" stroke="#a855f7" stroke-width="3"/>
+      <text x="490" y="47" text-anchor="middle" fill="#e2e8f0" font-size="8" font-weight="bold">RPi4</text>
+      <text x="490" y="57" text-anchor="middle" fill="#94a3b8" font-size="6">Graf+Prom</text>
+      <line id="conn-pi2" x1="130" y1="50" x2="276" y2="50" stroke="#475569" stroke-width="2" class="conn-line"/>
+      <line id="conn-pi4" x1="324" y1="50" x2="470" y2="50" stroke="#475569" stroke-width="2" class="conn-line"/>
+      <circle id="hb-pi2" cx="203" cy="50" r="4" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
+      <circle id="hb-pi4" cx="397" cy="50" r="4" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
     </svg>
-    <div class="flex justify-center gap-6 mt-2 text-xs">
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi2"></span>RPi2 <span id="hb-time-pi2" class="text-gray-500">never</span></span>
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi4"></span>RPi4 <span id="hb-time-pi4" class="text-gray-500">never</span></span>
+    <div class="flex justify-center gap-4 sm:gap-6 mt-1 text-xs">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi2"></span>RPi2 <span id="hb-time-pi2" class="text-gray-500">--</span></span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi4"></span>RPi4 <span id="hb-time-pi4" class="text-gray-500">--</span></span>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-    <div id="card-relay" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
+  <!-- Node cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-green-500">
       <div class="flex justify-between items-start">
-        <h2 class="text-lg font-semibold">OrangePi Relay</h2>
+        <h2 class="text-sm sm:text-base font-semibold">OrangePi</h2>
         <span id="badge-relay" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
-      <p class="text-sm text-gray-400 mt-1">Central relay on 0.0.0.0:42000</p>
-      <div id="telem-relay" class="mt-2 text-sm text-gray-400">Connected clients: 0</div>
-      <div class="mt-1 text-sm space-y-0.5">
-        <p>PID: <span id="pid-relay" class="text-gray-400">-</span></p>
-        <p>Logs: <span id="logcount-relay" class="text-gray-400">0</span></p>
-      </div>
+      <div id="telem-relay" class="mt-1 text-xs text-gray-400">Connected: 0</div>
+      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-relay">-</span> &sdot; <span id="logcount-relay">0</span> logs</div>
     </div>
-
-    <div id="card-pi2" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
+    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-blue-500">
       <div class="flex justify-between items-start">
-        <h2 class="text-lg font-semibold">RPi2 Client</h2>
+        <h2 class="text-sm sm:text-base font-semibold">RPi2 (Pi-hole)</h2>
         <span id="badge-pi2" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
-      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.254.44:42000</p>
-      <div id="telem-pi2" class="mt-2 text-sm text-gray-400">Waiting...</div>
-      <div class="mt-1 text-sm space-y-0.5">
-        <p>PID: <span id="pid-pi2" class="text-gray-400">-</span></p>
-        <p>Logs: <span id="logcount-pi2" class="text-gray-400">0</span></p>
-      </div>
+      <div id="telem-pi2" class="mt-1 text-xs text-gray-400">Waiting...</div>
+      <div id="svc-pi2" class="mt-1 text-xs text-green-400"></div>
+      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-pi2">-</span> &sdot; <span id="logcount-pi2">0</span> logs</div>
     </div>
-
-    <div id="card-pi4" class="node-card bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
+    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-purple-500">
       <div class="flex justify-between items-start">
-        <h2 class="text-lg font-semibold">RPi4 Client</h2>
+        <h2 class="text-sm sm:text-base font-semibold">RPi4 (Graf+Prom)</h2>
         <span id="badge-pi4" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
       </div>
-      <p class="text-sm text-gray-400 mt-1">Connects to 192.168.254.44:42000</p>
-      <div id="telem-pi4" class="mt-2 text-sm text-gray-400">Waiting...</div>
-      <div class="mt-1 text-sm space-y-0.5">
-        <p>PID: <span id="pid-pi4" class="text-gray-400">-</span></p>
-        <p>Logs: <span id="logcount-pi4" class="text-gray-400">0</span></p>
-      </div>
+      <div id="telem-pi4" class="mt-1 text-xs text-gray-400">Waiting...</div>
+      <div id="svc-pi4" class="mt-1 text-xs text-purple-400"></div>
+      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-pi4">-</span> &sdot; <span id="logcount-pi4">0</span> logs</div>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+  <!-- Services & Compile row -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 service-card">
+      <h2 class="text-sm sm:text-base font-semibold mb-2">Service Status</h2>
+      <div id="service-detail" class="text-xs text-gray-400 space-y-1">No service data yet</div>
+    </div>
+    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 service-card">
+      <h2 class="text-sm sm:text-base font-semibold mb-2">Cross-Compile History</h2>
+      <div id="compile-detail" class="text-xs text-gray-400 space-y-1">No compile data yet</div>
+    </div>
+  </div>
+
+  <!-- Log & Events -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
       <div class="flex justify-between items-center mb-2">
-        <h2 class="text-lg font-semibold">Live Log</h2>
+        <h2 class="text-sm sm:text-base font-semibold">Live Log</h2>
         <button id="btn-clear-logs" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
       </div>
-      <div id="log-container" class="bg-gray-950 rounded p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
+      <div id="log-container" class="bg-gray-950 rounded p-2 h-56 sm:h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
       <div class="flex justify-between items-center mb-2">
-        <h2 class="text-lg font-semibold">Event History</h2>
+        <h2 class="text-sm sm:text-base font-semibold">Events</h2>
         <button id="btn-clear-events" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
       </div>
-      <div id="event-container" class="bg-gray-950 rounded p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
+      <div id="event-container" class="bg-gray-950 rounded p-2 h-56 sm:h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
     </div>
+  </div>
+
+  <!-- Service Log (full history) -->
+  <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-4">
+    <div class="flex justify-between items-center mb-2">
+      <h2 class="text-sm sm:text-base font-semibold">Service Log</h2>
+      <span class="text-xs text-gray-500">Rolling, last 10000 entries</span>
+    </div>
+    <div id="service-log-container" class="bg-gray-950 rounded p-2 h-40 sm:h-48 overflow-y-auto font-mono text-xs leading-relaxed"></div>
   </div>
 </div>
 
 <script>
 const logContainer = document.getElementById('log-container');
 const eventContainer = document.getElementById('event-container');
-const badgeEls = {relay: document.getElementById('badge-relay'), pi2: document.getElementById('badge-pi2'), pi4: document.getElementById('badge-pi4')};
-const pidEls = {relay: document.getElementById('pid-relay'), pi2: document.getElementById('pid-pi2'), pi4: document.getElementById('pid-pi4')};
-const logcountEls = {relay: document.getElementById('logcount-relay'), pi2: document.getElementById('logcount-pi2'), pi4: document.getElementById('logcount-pi4')};
-const telemEls = {relay: document.getElementById('telem-relay'), pi2: document.getElementById('telem-pi2'), pi4: document.getElementById('telem-pi4')};
-const hbPulse = {pi2: document.getElementById('hb-pi2'), pi4: document.getElementById('hb-pi4')};
-const hbTime = {pi2: document.getElementById('hb-time-pi2'), pi4: document.getElementById('hb-time-pi4')};
-const indicators = {pi2: document.getElementById('indicator-pi2'), pi4: document.getElementById('indicator-pi4')};
-const nodeSvg = {pi2: document.getElementById('node-pi2'), pi4: document.getElementById('node-pi4')};
-const connLines = {pi2: document.getElementById('conn-pi2'), pi4: document.getElementById('conn-pi4')};
+const svcLogContainer = document.getElementById('service-log-container');
+const badgeEls = {relay:document.getElementById('badge-relay'),pi2:document.getElementById('badge-pi2'),pi4:document.getElementById('badge-pi4')};
+const pidEls = {relay:document.getElementById('pid-relay'),pi2:document.getElementById('pid-pi2'),pi4:document.getElementById('pid-pi4')};
+const lcEls = {relay:document.getElementById('logcount-relay'),pi2:document.getElementById('logcount-pi2'),pi4:document.getElementById('logcount-pi4')};
+const telemEls = {relay:document.getElementById('telem-relay'),pi2:document.getElementById('telem-pi2'),pi4:document.getElementById('telem-pi4')};
+const svcEls = {pi2:document.getElementById('svc-pi2'),pi4:document.getElementById('svc-pi4')};
+const hbPulse = {pi2:document.getElementById('hb-pi2'),pi4:document.getElementById('hb-pi4')};
+const hbTime = {pi2:document.getElementById('hb-time-pi2'),pi4:document.getElementById('hb-time-pi4')};
+const indicators = {pi2:document.getElementById('indicator-pi2'),pi4:document.getElementById('indicator-pi4')};
+const connLines = {pi2:document.getElementById('conn-pi2'),pi4:document.getElementById('conn-pi4')};
 
-const colorMap = {relay: 'text-green-400', pi2: 'text-blue-400', pi4: 'text-purple-400', dashboard: 'text-yellow-300'};
-const prefixMap = {relay: '[OrangePi]', pi2: '[RPi2]', pi4: '[RPi4]', dashboard: '[System]'};
-const typeColors = {system: 'text-yellow-300', heartbeat: 'text-green-300', heartbeat_ack: 'text-cyan-300', status: 'text-lime-300', warning: 'text-yellow-300', error: 'text-red-400'};
+const colorMap = {relay:'text-green-400',pi2:'text-blue-400',pi4:'text-purple-400',dashboard:'text-yellow-300'};
+const prefixMap = {relay:'[Relay]',pi2:'[RPi2]',pi4:'[RPi4]',dashboard:'[Sys]'};
+const typeColors = {system:'text-yellow-300',heartbeat:'text-green-300',heartbeat_ack:'text-cyan-300',services:'text-lime-300',compile:'text-pink-300',warning:'text-yellow-300',error:'text-red-400',status:'text-gray-400'};
 
-let lastHearbeatTimes = {};
+function badgeClass(s){return s==='running'?'bg-green-600':s==='stopped'?'bg-red-600':'bg-yellow-600'}
 
-function badgeClass(status) {
-  if (status === 'running') return 'bg-green-600';
-  if (status === 'stopped') return 'bg-red-600';
-  return 'bg-yellow-600';
+function appendLine(con,src,text,cls){
+  if(!text)return;
+  const d=document.createElement('div');
+  d.className=(colorMap[src]||'text-gray-300')+' '+(cls||'')+' log-entry';
+  d.textContent=(prefixMap[src]||'['+src+']')+' '+text;
+  con.appendChild(d);
+  con.scrollTop=con.scrollHeight;
+  if(con.children.length>500)con.removeChild(con.firstChild);
 }
 
-function appendLine(container, source, text, extraClass) {
-  if (!text) return;
-  const div = document.createElement('div');
-  div.className = (colorMap[source] || 'text-gray-300') + ' ' + (extraClass || '') + ' log-entry';
-  div.textContent = (prefixMap[source] || '[' + source + ']') + ' ' + text;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  if (container.children.length > 500) container.removeChild(container.firstChild);
+function flashHB(name){
+  const p=hbPulse[name];if(p){p.setAttribute('opacity','1');setTimeout(()=>p.setAttribute('opacity','0'),2000)}
+  const ind=indicators[name];if(ind){ind.classList.add('heartbeat-pulse');setTimeout(()=>ind.classList.remove('heartbeat-pulse'),2000)}
+  const c=connLines[name];if(c){c.classList.add('hb-active');setTimeout(()=>c.classList.remove('hb-active'),2000)}
+  const now=Date.now();
+  if(hbTime[name])hbTime[name].textContent=new Date(now).toLocaleTimeString();
+  document.getElementById('hb-clock').textContent='Last: '+new Date(now).toLocaleTimeString();
 }
 
-function formatTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString();
+function renderTelem(name,data){
+  const el=telemEls[name];if(!el)return;
+  if(name==='relay'){el.textContent=data&&data.node_count!==undefined?'Connected: '+data.node_count:'Connected: 0';return}
+  if(!data||!Object.keys(data).length){el.textContent='Waiting...';return}
+  const p=[];
+  if(data.temp!==undefined)p.push('Temp: '+data.temp+'C');
+  if(data.load!==undefined)p.push('Load: '+data.load);
+  if(data.memory!==undefined)p.push(data.memory);
+  if(data.gpu_temp!==undefined)p.push('GPU: '+data.gpu_temp+'C');
+  if(data.throttling!==undefined)p.push(data.throttling);
+  el.textContent=p.length?p.join(' | '):'No data';
 }
 
-function flashHeartbeat(name) {
-  const pulse = hbPulse[name];
-  if (pulse) {
-    pulse.setAttribute('opacity', '1');
-    setTimeout(() => pulse.setAttribute('opacity', '0'), 2000);
-  }
-  const indicator = indicators[name];
-  if (indicator) {
-    indicator.classList.add('heartbeat-pulse');
-    setTimeout(() => indicator.classList.remove('heartbeat-pulse'), 2000);
-  }
-  const conn = connLines[name];
-  if (conn) {
-    conn.classList.add('hb-active');
-    setTimeout(() => conn.classList.remove('hb-active'), 2000);
-  }
-  const svgNode = nodeSvg[name];
-  if (svgNode) {
-    const orig = svgNode.getAttribute('stroke');
-    svgNode.setAttribute('stroke', '#22c55e');
-    setTimeout(() => svgNode.setAttribute('stroke', orig || '#3b82f6'), 2000);
-  }
-  const now = Date.now();
-  lastHearbeatTimes[name] = now;
-  if (hbTime[name]) hbTime[name].textContent = formatTime(now);
-  document.getElementById('hb-clock').textContent = 'Last heartbeat: ' + formatTime(now);
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
 }
 
-function renderTelemetry(name, data) {
-  const el = telemEls[name];
-  if (!el) return;
-  if (name === 'relay') {
-    if (data && data.node_count !== undefined) {
-      el.textContent = 'Connected clients: ' + data.node_count;
-    }
-    return;
+function renderSvc(name,data){
+  const el=svcEls[name];if(!el||!data)return;
+  if(name==='pi2'&&data.pihole_active){
+    const en=data.blocking==='enabled'?'&#x2713;':'&#x2717;';
+    el.innerHTML=en+' Pi-hole: '+data.pihole_active+' | blocking='+data.blocking;
+  }else if(name==='pi4'&&data.grafana){
+    el.textContent='Grafana: '+data.grafana+' v'+data.grafana_version+' | Prom: '+data.prometheus;
   }
-  if (!data || Object.keys(data).length === 0) {
-    el.textContent = 'Waiting...';
-    return;
-  }
-  const parts = [];
-  if (data.temp !== undefined) parts.push('Temp: ' + data.temp + 'C');
-  if (data.load !== undefined) parts.push('Load: ' + data.load);
-  if (data.memory !== undefined) parts.push('Mem: ' + data.memory);
-  if (data.gpu_temp !== undefined) parts.push('GPU: ' + data.gpu_temp + 'C');
-  if (data.throttling !== undefined) parts.push(data.throttling);
-  el.textContent = parts.length ? parts.join(' | ') : 'No telemetry yet';
 }
 
-const evtSource = new EventSource('/api/stream');
-evtSource.onmessage = function(e) {
-  const data = JSON.parse(e.data);
-  for (const [name, nd] of Object.entries(data.nodes)) {
-    const badge = badgeEls[name];
-    if (badge) {
-      badge.textContent = nd.status;
-      badge.className = 'px-2 py-0.5 text-xs rounded ' + badgeClass(nd.status);
-    }
-    for (const line of nd.new_logs) {
-      appendLine(logContainer, name, line);
-      if (line.includes('[HEARTBEAT OK]')) {
-        flashHeartbeat(name);
-      }
+function renderServiceDetail(services){
+  const el=document.getElementById('service-detail');
+  let html='';
+  if(services.pi2&&services.pi2.pihole_active){
+    const d=services.pi2;
+    html+='<div class="text-blue-400"><b>RPi2 Pi-hole:</b> '+d.pihole_active+' | blocking='+d.blocking+' | listening='+d.listening+'</div>';
+  }
+  if(services.pi4&&services.pi4.grafana){
+    const d=services.pi4;
+    html+='<div class="text-purple-400"><b>RPi4 Grafana:</b> '+d.grafana+' v'+d.grafana_version+' | Prom: '+d.prometheus+'</div>';
+  }
+  if(!html)html='<div class="text-gray-500">Waiting for service data...</div>';
+  el.innerHTML=html;
+}
+
+function renderCompiles(compiles){
+  const el=document.getElementById('compile-detail');
+  if(!compiles||compiles.length===0){el.innerHTML='<div class="text-gray-500">No cross-compile results yet</div>';return}
+  let html='';
+  for(let i=compiles.length-1;i>=0;i--){
+    const c=compiles[i];
+    const d=c.data||{};
+    const status=d.status||'?';
+    const ts=c.timestamp?new Date(c.timestamp).toLocaleString():'?';
+    const exit=d.exit_code;
+    const dur=d.duration?d.duration+'s':'?';
+    html+='<div class="'+(status==='ok'?'text-green-400':'text-red-400')+'">'+ts+' - status='+status+' exit='+exit+' dur='+dur+'</div>';
+    if(d.output){
+      html+='<pre class="text-gray-500 text-[10px] whitespace-pre-wrap mt-1 mb-2 max-h-40 overflow-auto">'+escapeHtml(d.output)+'</pre>';
     }
   }
-  for (const evt of data.events) {
-    appendLine(eventContainer, evt.source, evt.message, typeColors[evt.type] || '');
-    if (evt.type === 'heartbeat' || evt.type === 'heartbeat_ack') {
-      const name = evt.source === 'relay' ? null : evt.source;
-      if (name) flashHeartbeat(name);
-    }
+  el.innerHTML=html;
+}
+
+function renderSvcLog(entries){
+  if(!entries||entries.length===0)return;
+  for(const e of entries){
+    const d=document.createElement('div');
+    const ts=e.timestamp?new Date(e.timestamp).toLocaleString():'?';
+    const plat=e.platform||'?';
+    const typ=e.type||'?';
+    const dataStr=JSON.stringify(e.data||{}).substring(0,200);
+    d.className='text-gray-400 log-entry text-xs';
+    d.textContent='['+ts+'] ['+typ+'] '+plat+' -> '+dataStr;
+    svcLogContainer.appendChild(d);
   }
-  if (data.telemetry) {
-    for (const [name, telem] of Object.entries(data.telemetry)) {
-      renderTelemetry(name, telem);
-    }
+  svcLogContainer.scrollTop=svcLogContainer.scrollHeight;
+  if(svcLogContainer.children.length>300)svcLogContainer.innerHTML='';
+}
+
+let svcLogCache=[];
+async function fetchSvcLog(){
+  try{
+    const r=await fetch('/api/service-log?limit=50');
+    const entries=await r.json();
+    const newEntries=entries.slice(svcLogCache.length);
+    svcLogCache=entries;
+    renderSvcLog(newEntries);
+  }catch(e){}
+}
+
+const evtSource=new EventSource('/api/stream');
+evtSource.onmessage=function(e){
+  const data=JSON.parse(e.data);
+  for(const[name,nd]of Object.entries(data.nodes)){
+    const b=badgeEls[name];if(b){b.textContent=nd.status;b.className='px-2 py-0.5 text-xs rounded '+badgeClass(nd.status)}
+    for(const line of nd.new_logs)appendLine(logContainer,name,line);
   }
+  for(const evt of data.events){
+    appendLine(eventContainer,evt.source,evt.message,typeColors[evt.type]||'');
+    if(evt.type==='heartbeat_ack'&&(evt.source==='pi2'||evt.source==='pi4'))flashHB(evt.source);
+  }
+  if(data.telemetry){for(const[name,t]of Object.entries(data.telemetry))renderTelem(name,t)}
+  if(data.services){
+    for(const[name,s]of Object.entries(data.services))renderSvc(name,s);
+    renderServiceDetail(data.services);
+  }
+  if(data.compiles)renderCompiles(data.compiles);
 };
-evtSource.onerror = function() {
-  appendLine(logContainer, 'dashboard', 'Stream disconnected, retrying...', 'text-red-400');
-};
+evtSource.onerror=function(){appendLine(logContainer,'dashboard','Stream disconnected, retrying...','text-red-400')};
 
-document.getElementById('btn-start').onclick = function() { fetch('/api/start', {method: 'POST'}); };
-document.getElementById('btn-stop').onclick = function() { fetch('/api/stop', {method: 'POST'}); };
-document.getElementById('btn-clear-logs').onclick = function() { logContainer.innerHTML = ''; };
-document.getElementById('btn-clear-events').onclick = function() { eventContainer.innerHTML = ''; };
+document.getElementById('btn-start').onclick=function(){fetch('/api/start',{method:'POST'})};
+document.getElementById('btn-stop').onclick=function(){fetch('/api/stop',{method:'POST'})};
+document.getElementById('btn-clear-logs').onclick=function(){logContainer.innerHTML=''};
+document.getElementById('btn-clear-events').onclick=function(){eventContainer.innerHTML=''};
 
-async function pollStatus() {
-  try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    for (const [name, nd] of Object.entries({relay: data.relay, pi2: data.pi2, pi4: data.pi4})) {
-      const badge = badgeEls[name];
-      if (badge) {
-        badge.textContent = nd.status;
-        badge.className = 'px-2 py-0.5 text-xs rounded ' + badgeClass(nd.status);
-      }
-      const pidEl = pidEls[name];
-      if (pidEl) pidEl.textContent = nd.pid || '-';
-      const lcEl = logcountEls[name];
-      if (lcEl) lcEl.textContent = nd.log_count || '0';
+async function pollStatus(){
+  try{
+    const r=await fetch('/api/status');
+    const data=await r.json();
+    for(const[name,nd]of Object.entries({relay:data.relay,pi2:data.pi2,pi4:data.pi4})){
+      const b=badgeEls[name];if(b){b.textContent=nd.status;b.className='px-2 py-0.5 text-xs rounded '+badgeClass(nd.status)}
+      if(pidEls[name])pidEls[name].textContent=nd.pid||'-';
+      if(lcEls[name])lcEls[name].textContent=nd.log_count||'0';
     }
-    if (data.telemetry) {
-      for (const [name, telem] of Object.entries(data.telemetry)) {
-        renderTelemetry(name, telem);
-      }
+    if(data.telemetry){for(const[name,t]of Object.entries(data.telemetry))renderTelem(name,t)}
+    if(data.services){
+      for(const[name,s]of Object.entries(data.services))renderSvc(name,s);
+      renderServiceDetail(data.services);
     }
-  } catch(e) {}
+    if(data.compiles)renderCompiles(data.compiles);
+  }catch(e){}
 }
-setInterval(pollStatus, 3000);
+setInterval(pollStatus,3000);
+setInterval(fetchSvcLog,5000);
 pollStatus();
+fetchSvcLog();
 </script>
 </body>
 </html>

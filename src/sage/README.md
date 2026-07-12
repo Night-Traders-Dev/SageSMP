@@ -165,6 +165,68 @@ python3 app.py
 
 The dashboard captures process output from the relay and clients via SSE.
 
+### Service Monitoring (Pi-hole, Grafana/Prometheus, Cross-Compile)
+
+Each client enriches its 60-second heartbeat with extra service telemetry. The relay prints
+`[SERVICES]` and `[COMPILE]` lines, which the dashboard parses into a rolling JSON-lines log
+(`~/SageSMP/logs/service_log.jsonl`) and exposes via `/api/service-log`, `/api/compiles`, and
+`/api/status`.
+
+**Data flow:**
+
+```
+Pi2  /usr/local/bin/sagesmp-pihole.sh      -> /tmp/sagesmp_pihole.json
+Pi4  /usr/local/bin/sagesmp-services.sh    -> /tmp/sagesmp_services.json
+Pi4  /usr/local/bin/sagesmp-crosscompile.sh -> /tmp/sagesmp_compile_result.json
+
+Shell scripts (cron) -> JSON files on device
+  -> Sage client reads file each heartbeat (io.readfile + pure-Sage json_decode)
+  -> heartbeat JSON gains "services" / "compile" fields
+  -> relay prints [SERVICES]/[COMPILE]
+  -> dashboard parses + stores + renders in UI
+```
+
+**Heartbeat protocol extensions:**
+
+```json
+// RPi2 -> Relay  (Pi-hole status)
+{"client_id": 1, "platform": "RPi2", "info": "...", "timestamp": 123,
+ "services": {"pihole_active": "active", "blocking": "enabled", "listening": 1, "ftl_pid": 1255}}
+
+// RPi4 -> Relay  (Grafana + Prometheus)
+{"client_id": 2, "platform": "RPi4", "info": "...", "timestamp": 123,
+ "services": {"grafana": "active", "grafana_version": "11.5.2", "prometheus": "active", "prometheus_main": "active", "uptime": "..."},
+ "compile": {"status": "ok", "exit_code": 0, "start": "...", "end": "...", "duration": 13, "output": "..."}}
+```
+
+**Helper scripts** (in `scripts/`):
+
+| Script | Host | Output | Purpose |
+|--------|------|--------|---------|
+| `sagesmp-pihole.sh` | Pi2 | `/tmp/sagesmp_pihole.json` | Pi-hole FTL status, blocking state, listening ports |
+| `sagesmp-services.sh` | Pi4 | `/tmp/sagesmp_services.json` | Grafana server health + Prometheus node-exporter status |
+| `sagesmp-crosscompile.sh` | Pi4 | `/tmp/sagesmp_compile_result.json` | Runs `./sagemake --all`, captures exit code, timestamps, duration, output |
+
+**Cron setup** (install via `crontab -e` on each device):
+
+```bash
+# On Pi2 (every 5 minutes)
+*/5 * * * * /usr/local/bin/sagesmp-pihole.sh
+
+# On Pi4 (every 5 minutes + daily cross-compile at 3 AM)
+*/5 * * * * /usr/local/bin/sagesmp-services.sh
+0 3 * * * /usr/local/bin/sagesmp-crosscompile.sh
+```
+
+**Dashboard panels:**
+
+- **Service Status** — live Pi-hole (RPi2) and Grafana/Prometheus (RPi4) state from the SSE `services` feed.
+- **Cross-Compile History** — latest compile runs (status, exit code, duration) from `/api/compiles`.
+- **Service Log** — rolling log of every `[SERVICES]`/`[COMPILE]` event from `/api/service-log`.
+
+> Note: the cross-compile `output` field contains newlines escaped as `\n`; the Sage JSON codec
+> preserves them through the decode/encode round-trip so they render correctly in the dashboard.
+
 ## Mailbox System
 
 The mailbox system provides FIFO message queues with optional capacity limits:
