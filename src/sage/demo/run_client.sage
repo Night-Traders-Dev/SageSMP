@@ -5,21 +5,41 @@ import sys
 import io
 import smp.client as smp_client
 
-let args = sys.args()
+let all_args = sys.args()
+let args = []
+let found = false
+for i in range(len(all_args)):
+    if found:
+        push(args, all_args[i])
+    else:
+        let s = all_args[i]
+        let is_sage = false
+        if len(s) >= 5:
+            for j in range(len(s) - 4):
+                if s[j] == "." and s[j+1] == "s" and s[j+2] == "a" and s[j+3] == "g" and s[j+4] == "e":
+                    is_sage = true
+                end
+            end
+        end
+        if is_sage:
+            found = true
+        end
+    end
+end
 
 let name = "RPi-Client"
-if len(args) > 1:
-    name = args[1]
+if len(args) > 0:
+    name = args[0]
 end
 
 let target_id = 0
-if len(args) > 2:
-    target_id = tonumber(args[2])
+if len(args) > 1:
+    target_id = tonumber(args[1])
 end
 
 let server_ip = "127.0.0.1"
-if len(args) > 3:
-    server_ip = args[3]
+if len(args) > 2:
+    server_ip = args[2]
 end
 
 print "=== Starting Real SMP Client: " + name + " ==="
