@@ -155,9 +155,12 @@ def main():
     if args.init_config:
         init_config()
     elif args.test:
-        banner("Testing SageSMP")
-        res = run_cmd([SAGE_BIN, "src/sage/demo/example.sage"])
-        print(res.stdout)
+        banner("Testing SageSMP Standard Examples")
+        res1 = run_cmd([SAGE_BIN, "-I", "src", "src/sage/demo/example.sage"])
+        print(res1.stdout)
+        banner("Testing SageSMP Edge Cases")
+        res2 = run_cmd([SAGE_BIN, "-I", "src", "src/sage/demo/test_edge_cases.sage"])
+        print(res2.stdout)
     else:
         build_smp(
             target=args.target,
