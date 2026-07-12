@@ -67,9 +67,11 @@ print "Connecting to server at " + server_ip + ":42000..."
 client.connect(server_ip, 42000)
 
 # Set handler for incoming messages
-client.on("*", proc(msg):
+proc on_any(msg):
     print "Client " + name + " received: " + str(msg["payload"])
-end)
+end
+
+client.on("*", on_any)
 
 if mode == "send":
     print "Sending message to node-" + str(target_id) + ": " + send_msg

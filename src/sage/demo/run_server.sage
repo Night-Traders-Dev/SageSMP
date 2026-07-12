@@ -26,9 +26,11 @@ end
 server.on("join", on_join)
 
 # Set message event handler
-server.on("message", proc(sender, target, payload):
+proc on_message(sender, target, payload):
     print "Server routed message from node-" + str(sender) + " to node-" + str(target) + ": " + str(payload)
-end)
+end
+
+server.on("message", on_message)
 
 # Run server
 server.start()

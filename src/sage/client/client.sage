@@ -80,7 +80,7 @@ class Client:
                 handlers[i](msg)
         end
         
-        record_recv(self.stats, len(str(raw_msg)))
+        smp_transport.record_recv(self.stats, len(str(raw_msg)))
     
     proc poll(self):
         if self.connection == nil:
