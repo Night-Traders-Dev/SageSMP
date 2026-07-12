@@ -32,23 +32,35 @@ if len(args) > 0:
     name = args[0]
 end
 
-let target_id = 0
+let mode = "listen"
 if len(args) > 1:
-    target_id = tonumber(args[1])
+    mode = args[1]
 end
 
+let target_id = 0
+let send_msg = ""
 let server_ip = "127.0.0.1"
-if len(args) > 2:
-    server_ip = args[2]
+
+if mode == "send":
+    if len(args) > 2:
+        target_id = tonumber(args[2])
+    end
+    if len(args) > 3:
+        send_msg = args[3]
+    end
+    if len(args) > 4:
+        server_ip = args[4]
+    end
+else:
+    if len(args) > 2:
+        server_ip = args[2]
+    end
 end
 
-print "=== Starting Real SMP Client: " + name + " ==="
+print "=== Starting Real SMP Client: " + name + " in " + mode + " mode ==="
 
 let client = smp_client.create_client(name, "127.0.0.1", 42001)
 print "My Node ID: " + str(client.node["id"])
-
-# Write Node ID to a file in the home directory
-io.writefile(sys.getenv("HOME") + "/node_id", str(client.node["id"]))
 
 # Connect to OrangePi server
 print "Connecting to server at " + server_ip + ":42000..."
@@ -59,16 +71,15 @@ client.on("*", proc(msg):
     print "Client " + name + " received: " + str(msg["payload"])
 end)
 
-# Loop and poll for messages
-let count = 0
-while count < 30:
-    count = count + 1
-    sys.sleep(1000) # Sleep 1 second
+if mode == "send":
+    print "Sending message to node-" + str(target_id) + ": " + send_msg
+    client.send(target_id, send_msg)
+    import thread
+    thread.sleep(2.0) # Sleep 2 seconds to flush socket
+else:
+    # Listen mode: Write Node ID to a file in the home directory
+    io.writefile(sys.getenv("HOME") + "/node_id", str(client.node["id"]))
+    print "Waiting for message..."
     client.poll()
-    
-    # On count == 5, send a message to target_id (if target_id is specified)
-    if count == 5 and target_id != 0:
-        print "Sending message to node-" + str(target_id)
-        client.send(target_id, "Hello from client " + name)
-    end
+    print "Exiting cleanly after receiving message."
 end

@@ -110,7 +110,8 @@ class Client:
         self.running = true
         while self.running:
             tick(self)
-            sys.sleep(10)
+            import thread
+            thread.sleep(0.01)
         end
     
     proc stop(self):

@@ -40,7 +40,8 @@ class Server:
             if client != nil:
                 self.handle_client(client)
             end
-            sys.sleep(10)
+            import thread
+            thread.sleep(0.01)
         end
     
     proc stop(self):
