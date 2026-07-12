@@ -9,9 +9,18 @@ SageSMP provides a distributed messaging system inspired by Erlang-style mailbox
 ## Real Multi-Node Networking
 
 The implementation has been fully migrated from simulated mocks to real network communication:
-- **Native TCP Sockets**: The transport layer (`smp.transport`) is fully wired to native OS sockets via Sage's `tcp` module, allowing separate nodes on different machines or processes to communicate over real TCP/IP connections.
-- **JSON Protocol Encoding**: Message serialization/deserialization uses Sage's standard `json` port, assuring full payload compatibility and correct routing of dynamic types.
-- **Base64-safe Cryptography**: The XOR cipher has been updated to use Base64 encoding to prevent null-byte (`chr(0)`) truncation and UTF-8 code point corruption when transmitting encrypted envelopes over socket buffers.
+- **Native TCP Sockets**: The transport layer is fully wired to native OS sockets via Sage's `tcp` module, allowing separate nodes on different machines or processes to communicate over real TCP/IP connections.
+- **JSON Protocol Encoding**: Message serialization/deserialization uses custom pure-Sage JSON codec (Sage's `import json` causes a compiler ICE when compiling to ELF).
+- **60-Second Heartbeat**: Each client connects to the OrangePi relay every 60 seconds, sending system telemetry and receiving cluster status.
+
+## Important: Sage Compiler Limitations
+
+- **Do not use `import json`** — it causes an internal compiler error when compiling to ELF with `sage --compile`. A pure-Sage JSON encoder/decoder is used instead.
+- **Compiled ELF binaries (`sage --compile`) have a runtime bug with `tcp.listen()`** that returns `nil` or crashes. Always run with `sage --jit` for real TCP networking.
+- **Semicolons are not allowed** — each statement must be on its own line.
+- **`io.readfile()` includes trailing newlines** — use `stripnl()` before `tonumber()`.
+- **`thread.spawn(func)` with zero args causes ICE** — use `thread.spawn(func, nil)` with a dummy parameter.
+- **Avoid `chr()` inside for-loops combined with array indexing** — a Sage compiler bug corrupts scope tracking. Use simple string concatenation with precomputed values instead.
 
 ## Module Structure
 
@@ -32,10 +41,13 @@ src/sage/
 │   └── transport.sage     # Network transport layer (TCP framing)
 ├── client/
 │   ├── client.sage        # Client implementation for connecting to servers
-│   └── client_shell.sage  # Interactive client shell with OTP encryption
+│   ├── client_shell.sage  # Interactive client shell
+│   ├── rpi2_client.sage   # RPi2 heartbeat client with CPU telemetry
+│   └── rpi4_client.sage   # RPi4 heartbeat client with GPU telemetry
 ├── server/
 │   ├── server.sage        # Server implementation for accepting connections
-│   └── relay.sage         # Configurable relay server with OTP encryption
+│   ├── relay.sage         # Configurable relay server
+│   └── orangepi_relay.sage # OrangePi central relay (port 42000)
 ├── rtos/
 │   └── rtos.sage          # Pure-Sage RTOS scheduler with GC-aware cleanup
 └── demo/
@@ -51,19 +63,11 @@ src/sage/
 import smp.client
 
 let client = smp_client.Client("my-node", "127.0.0.1", 42000)
-
-# Connect to server
 client.connect("127.0.0.1", 42000)
-
-# Register message handler
 client.on("1", proc(msg):
     print "Received: " + str(msg["payload"])
 )
-
-# Send a message to another node
 let seq = client.send(2, {"data": "Hello, node 2!"})
-
-# Run event loop
 client.run()
 ```
 
@@ -73,14 +77,108 @@ client.run()
 import smp.server
 
 let server = smp_server.Server("cluster-master", "0.0.0.0", 42000)
-
-# Register event handlers
 server.on("message", proc(sender, target, payload):
     print "Message from " + str(sender) + " to " + str(target)
 )
-
-# Start accepting connections
 server.start()
+```
+
+## SageSMP Cluster (OrangePi + RPi2 + RPi4)
+
+### Architecture
+
+```
+OrangePi (192.168.254.44) - Relay Server (port 42000) + Dashboard (port 8081)
+├── RPi2/PeachPi (10.42.1.109) - Client - sends CPU temp/load/memory
+└── RPi4/ubuntu (10.42.0.141)  - Client - sends CPU/GPU temp, load, memory, throttling
+```
+
+Each client connects to the OrangePi relay every 60 seconds via TCP, sends a JSON heartbeat with system telemetry, and receives a response with cluster node count and server timestamp.
+
+### Running the Relay
+
+**Always use `sage --jit`** for real TCP networking:
+
+```bash
+# On OrangePi
+stdbuf -oL sage --jit src/sage/server/orangepi_relay.sage
+
+# Or with custom port
+SMP_PORT=42001 stdbuf -oL sage --jit src/sage/server/orangepi_relay.sage
+```
+
+### Running the Clients
+
+```bash
+# On RPi2/PeachPi
+SMP_HOST="192.168.254.44" stdbuf -oL sage --jit src/sage/client/rpi2_client.sage
+
+# On RPi4
+SMP_HOST="192.168.254.44" stdbuf -oL sage --jit src/sage/client/rpi4_client.sage
+```
+
+The clients will:
+1. Connect to the relay and send a JSON heartbeat
+2. Print `[HEARTBEAT OK]` with node count and server timestamp
+3. Sleep for 60 seconds, then repeat
+
+### Protocol
+
+The relay sends a plain JSON response (no OTP encryption):
+
+```json
+// Client -> Relay
+{"client_id": 1, "platform": "RPi2", "info": "Temp: 36.8C, Load: 0.4, Available: 768MB", "timestamp": 1234567890}
+
+// Relay -> Client
+{"status": "ok", "node_count": 2, "server_ts": 1234567890}
+```
+
+### Deploying Updates
+
+The `sagemake` build script compiles all three targets:
+
+```bash
+./sagemake --all
+```
+
+For quick deployment to devices:
+
+```bash
+# Copy to OrangePi
+rsync -av src/sage/server/orangepi_relay.sage src/sage/client/ OrangePi:~/SageSMP/src/sage/
+
+# Then from OrangePi to pi2/pi4
+ssh OrangePi "cat ~/SageSMP/src/sage/client/rpi2_client.sage | ssh evelyn@10.42.1.109 'cat > ~/SageSMP/src/sage/client/rpi2_client.sage'"
+ssh OrangePi "cat ~/SageSMP/src/sage/client/rpi4_client.sage | ssh ubuntu@10.42.0.141 'cat > ~/SageSMP/src/sage/client/rpi4_client.sage'"
+```
+
+### Dashboard
+
+A FastAPI dashboard on OrangePi port 8081 monitors the cluster:
+
+```bash
+cd dashboard
+python3 app.py
+# Open http://192.168.254.44:8081
+```
+
+The dashboard captures process output from the relay and clients via SSE.
+
+## Mailbox System
+
+The mailbox system provides FIFO message queues with optional capacity limits:
+
+```sage
+import smp.mailbox
+
+let mbox = smp_mailbox.create_mailbox(node_id, 100)
+let msg = smp_mailbox.create_message(sender, recipient, MSG_TYPE_DATA, payload)
+let seq = smp_mailbox.send(mbox, msg)
+let received = smp_mailbox.recv(mbox)
+smp_mailbox.on_mail(mbox, MSG_TYPE_DATA, proc(msg):
+    # Handle message
+)
 ```
 
 ## Protocol Opcodes
@@ -98,37 +196,6 @@ server.start()
 | 8 | BROADCAST | Broadcast to all nodes |
 | 9 | NODE_INFO | Node metadata exchange |
 
-## Mailbox System
-
-The mailbox system provides FIFO message queues with optional capacity limits:
-
-```sage
-import smp.mailbox
-
-# Create mailbox with 100 message capacity
-let mbox = smp_mailbox.create_mailbox(node_id, 100)
-
-# Send messages
-let msg = smp_mailbox.create_message(sender, recipient, MSG_TYPE_DATA, payload)
-let seq = smp_mailbox.send(mbox, msg)
-
-# Receive messages
-let received = smp_mailbox.recv(mbox)
-
-# Register handlers for automatic processing
-smp_mailbox.on_mail(mbox, MSG_TYPE_DATA, proc(msg):
-    # Handle message
-)
-```
-
-## Node States
-
-- `NODE_STATE_DISCONNECTED` (0) - Node not connected
-- `NODE_STATE_CONNECTING` (1) - Connection in progress
-- `NODE_STATE_CONNECTED` (2) - TCP connected
-- `NODE_STATE_READY` (3) - Ready for messaging
-- `NODE_STATE_ERROR` (4) - Error state
-
 ## Running Tests
 
 ```bash
@@ -139,26 +206,6 @@ Or compile to binary:
 ```bash
 sage --compile src/sage/demo/demo.sage -o bin/demo_smp
 ./bin/demo_smp
-```
-
-### Demo Output
-
-The demo shows:
-- **Mailbox**: Message queuing with FIFO delivery and statistics tracking
-- **Node Registry**: Node discovery, registration, and capability management  
-- **RTOS**: Priority-based task scheduling with periodic GC-aware memory cleanup
-
-Example:
-```
-=== SageSMP Mailbox Demo ===
-Sending messages...
-  Sent 5 messages
-Processing messages...
-  Handler: Received message #1: Message 1
-  ...
-Mailbox stats:
-  Sent: 5
-  Received: 5
 ```
 
 ## Configuration
@@ -174,179 +221,6 @@ Defaults can be overridden in code:
 - `DEFAULT_MAX_NODES` (64)
 - `DEFAULT_MAILBOX_SIZE` (1024)
 
-## Building
-
-Use the included sagemake script:
-
-```bash
-# Initialize config file
-./sagemake --init-config
-
-# Build all binaries
-./sagemake --all
-
-# Build specific component
-./sagemake src/sage/client/client_shell
-
-# Build relay server
-./sagemake --relay
-
-# Build client shell
-./sagemake --client
-
-# Run demo
-./bin/demo_smp
-
-# Run tests
-./sagemake --test
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│              Application Layer               │
-├─────────────────────────────────────────────┤
-│         Client/Server (smp.client)          │
-├─────────────────────────────────────────────┤
-│          Transport (smp.transport)          │
-├─────────────────────────────────────────────┤
-│           Protocol (smp.core)             │
-├─────────────────────────────────────────────┤
-│           Mailbox (smp.mailbox)            │
-├─────────────────────────────────────────────┤
-│             Crypto (smp.crypto)             │
-└─────────────────────────────────────────────┘
-```
-
-## License
-
-MIT
-
-## SageSMP Cluster (OrangePi + RPi2 + RPi4)
-
-### OrangePi Relay Server
-
-The OrangePi acts as the central relay server for the cluster:
-
-```bash
-# On OrangePi
-./sagemake --orangepi
-./bin/orangepi_relay
-```
-
-The relay listens on `0.0.0.0:42000` and collects periodic info from connected clients.
-
-### RPi2/RPi4 Clients
-
-Clients connect to the OrangePi relay and share periodic system status:
-
-```bash
-# On RPi2 (10.42.1.109)
-./sagemake --rpi2
-./bin/rpi2_client
-# Sends: Temp, Load, Memory info every 5 ticks
-
-# On RPi4 (10.42.0.141)
-./sagemake --rpi4
-./bin/rpi4_client
-# Sends: Temp, Load, Memory, GPU temp, Throttling status
-```
-
-### Dashboard Integration
-
-The SageCluster dashboard includes SMP protocol monitoring:
-
-- **API Endpoint**: `/api/smp-status` - Returns running status of relay and clients
-- **JS Module**: `static/js/smp_monitor.js` - Updates dashboard with SMP cards in real-time
-
-To deploy on OrangePi:
-```bash
-# Copy source
-rsync -av src/sage OrangePi:~/SageSMP/
-scp sagemake OrangePi:~/SageSMP/
-
-# Build on OrangePi
-ssh OrangePi '~/SageSMP/sagemake --orangepi'
-
-# Restart dashboard to see SMP cards
-ssh OrangePi 'pm2 restart sagecluster'
-```
-
-### Network Configuration
-
-```
-OrangePi (192.168.1.10) - Relay Server - port 42000
-├── RPi2 (10.42.1.109) - Client - port 42001
-└── RPi4 (10.42.0.141) - Client - port 42002
-```
-
-Shared secret for OTP encryption: `orangepi_cluster_secret_2026`
-
-## Build Configuration
-
-Create `.smp_config` to customize build settings:
-
-The relay server allows runtime configuration of message forwarding rules with OTP encryption:
-
-```sage
-# Add relay rule: when trigger_msg received, forward forward_msg to target
-# All forwarded messages are automatically OTP-encrypted
-add_relay_rule("hello", "192.168.1.100", 42001, "Hello from relay!", "secret_key", "otp_pass", 100)
-add_relay_rule("status", "192.168.1.100", 42001, "Status OK", "secret_key", "otp_pass", 200)
-
-# Shell commands for runtime configuration
-relay_shell_help()
-#   add <trigger> <host> <port> <forward_msg>  - Add relay rule
-#   remove <index>                           - Remove relay rule
-#   list                                     - List all rules
-#   clear                                    - Clear all rules
-```
-
-## Client Shell
-
-Interactive shell for connecting to and messaging any node with OTP encryption:
-
-```sage
-client_connect("192.168.1.100", 42001)
-client_send_secure("192.168.1.100", 42001, "My message", "secret_key", "otp_pass", 999, sender_id, recipient_id)
-client_show_outbox()
-```
-
-## End-to-End Encryption
-
-All secure messaging uses pure Sage OTP encryption:
-
-```sage
-# Send encrypted message
-let envelope = secure_send(message, secret_key, otp_passphrase, otp_seed, sender_id, recipient_id)
-
-# Receive and decrypt
-let decrypted = secure_receive(envelope, secret_key, otp_passphrase, otp_seed, expected_sender)
-```
-
-The encryption uses:
-- **OTP Key**: Derived from passphrase + seed using pure Sage hash
-- **Signing**: Simple hash-based signature with secret key
-- **No external dependencies**: Pure Sage implementation
-
-## Performance Benchmarks
-
-SageSMP includes a micro-benchmark suite (`src/sage/demo/benchmark.sage`) to measure performance characteristics. Here are the baseline results collected from the test runner:
-
-| Component / Operation | Throughput (ops/second) | Description |
-|-----------------------|-------------------------|-------------|
-| **Mailbox (Send + Recv)** | 644.79 | paired enqueues and dequeues on active FIFO queues |
-| **Protocol Encode** | 5,928.79 | JSON serialization of protocol messages |
-| **Protocol Decode** | 3,723.21 | cJSON parsing and validation of envelopes |
-| **Crypto (Encrypt + Decrypt)** | 2,417.67 | Base64-safe XOR encryption roundtrips |
-| **Transport Buffer Writes** | 6,331.21 | chunk writes to connection framing buffers |
-
-To run the benchmarks yourself:
-```bash
-sage -I src src/sage/demo/benchmark.sage
-```
-
 ## Build Configuration
 
 Create `.smp_config` to customize build settings:
@@ -361,3 +235,7 @@ Create `.smp_config` to customize build settings:
   "enable_crypto": true
 }
 ```
+
+## License
+
+MIT

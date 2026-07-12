@@ -1,178 +1,201 @@
-# OrangePi Relay Server
-# ====================
-# SMP relay server for OrangePi - central hub for RPi clients
-
 gc_disable()
 
-# ============================================================================
-# Pure Sage Hash
-# ============================================================================
-
-proc simple_hash(value, seed):
-    let h = seed
-    for i in range(len(str(value))):
-        h = ((h * 33) + ord(str(value)[i])) % 1000000007
-    return h
-
-proc generate_otp_key(passphrase, length, seed):
-    let key = []
-    for i in range(length):
-        let h = simple_hash(passphrase + str(i), seed)
-        push(key, (h % 255) - 127)
-    return key
-
-proc sign_message(message, secret_key, node_id):
-    let sig = simple_hash(message + secret_key + str(node_id), 12345)
-    let sig2 = simple_hash(str(sig), 54321)
-    return [sig, sig2]
-
-proc otp_encrypt(message, otp_key):
-    let encrypted = ""
-    for i in range(len(str(message))):
-        let m_byte = ord(str(message)[i])
-        let k_byte = otp_key[i % len(otp_key)]
-        encrypted = encrypted + chr((m_byte + k_byte) % 256)
-    return encrypted
-
-proc otp_decrypt(encrypted, otp_key):
-    let decrypted = ""
-    for i in range(len(str(encrypted))):
-        let e_byte = ord(str(encrypted)[i])
-        let k_byte = otp_key[i % len(otp_key)]
-        let d_byte = (e_byte - k_byte + 256) % 256
-        decrypted = decrypted + chr(d_byte)
-    return decrypted
-
-proc create_secure_message(message, secret_key, otp_pass, otp_seed, sender_id, recipient_id):
-    let key = generate_otp_key(otp_pass, len(str(message)), otp_seed)
-    let encrypted = otp_encrypt(message, key)
-    let sig = sign_message(encrypted, secret_key, sender_id)
-    return {
-        "payload": encrypted,
-        "otp": key,
-        "sig": sig,
-        "from": sender_id,
-        "to": recipient_id
-    }
-
-proc read_secure_message(msg, secret_key, otp_pass, otp_seed, expected_sender):
-    let valid = verify_signature(msg["payload"], msg["sig"], secret_key, expected_sender)
-    if not valid:
-        return nil
-    let key = generate_otp_key(otp_pass, len(str(msg["payload"])), otp_seed)
-    return otp_decrypt(msg["payload"], key)
-
-proc verify_signature(message, signature, secret_key, node_id):
-    let expected = sign_message(message, secret_key, node_id)
-    return signature[0] == expected[0] and signature[1] == expected[1]
-
-# ============================================================================
-# Client Registry
-# ============================================================================
-
-let clients = {}
-let client_info = {}
-
-proc register_client(client_id, host, port, platform):
-    let client = {}
-    client["id"] = client_id
-    client["host"] = host
-    client["port"] = port
-    client["platform"] = platform
-    client["last_update"] = clock()
-    clients[str(client_id)] = client
-    client_info[str(client_id)] = {}
-    print("Registered client " + str(client_id) + " (" + platform + ") from " + host + ":" + str(port))
-
-proc unregister_client(client_id):
-    if dict_has(clients, str(client_id)):
-        dict_delete(clients, str(client_id))
-    if dict_has(client_info, str(client_id)):
-        dict_delete(client_info, str(client_id))
-    print("Unregistered client " + str(client_id))
-
-proc update_client_info(client_id, info):
-    if dict_has(client_info, str(client_id)):
-        client_info[str(client_id)] = info
-        clients[str(client_id)]["last_update"] = clock()
-
-proc get_client_by_platform(platform):
-    let result = []
-    let ids = dict_keys(clients)
-    for i in range(len(ids)):
-        let c = clients[ids[i]]
-        if c["platform"] == platform:
-            push(result, c)
-    return result
-
-proc broadcast_to_all(message, secret_key, otp_pass, otp_seed):
-    let ids = dict_keys(clients)
-    for i in range(len(ids)):
-        let c = clients[ids[i]]
-        print("Broadcasting to client " + str(c["id"]) + " at " + c["host"] + ":" + str(c["port"]))
-        let env = create_secure_message(message, secret_key, otp_pass, otp_seed, 0, c["id"])
-        # In real implementation, send via network
-    return len(ids)
-
-# ============================================================================
-# Info Exchange Handler
-# ============================================================================
-
-proc handle_info_exchange(sender_id, payload):
-    let decrypted = read_secure_message(payload, SMP_SECRET, SMP_OTP_PASS, SMP_OTP_SEED, sender_id)
-    if decrypted != nil:
-        print("Received info from client " + str(sender_id) + ": " + decrypted)
-        update_client_info(sender_id, decrypted)
-
-# ============================================================================
-# Configuration
-# ============================================================================
+import tcp
+import thread
+import sys
 
 let SMP_SECRET = "orangepi_cluster_secret_2026"
-let SMP_OTP_PASS = "cluster_otp_passphrase"
-let SMP_OTP_SEED = 42424
 let RELAY_PORT = 42000
+let DQ = chr(34)
 
-# ============================================================================
-# Main Loop
-# ============================================================================
+proc json_escape(s):
+    let r = replace(s, chr(92), chr(92) + chr(92))
+    r = replace(r, chr(34), chr(92) + chr(34))
+    return r
 
-proc run_orangepi_relay():
-    print("=== OrangePi Relay Server ===")
-    print("Listening on 0.0.0.0:" + str(RELAY_PORT))
-    print("Secret: " + SMP_SECRET)
-    print("")
-    
-    # Wait for clients to connect and send periodic info
-    let tick = 0
-    while tick < 100:
-        tick = tick + 1
-        
-        # Print connected clients every 10 ticks
-        if tick % 10 == 0:
-            let ids = dict_keys(clients)
-            print("Connected clients: " + str(len(ids)))
-            for i in range(len(ids)):
-                let c = clients[ids[i]]
-                print("  - " + c["platform"] + " (id=" + str(c["id"]) + ")")
-        
-        # Simulate receiving info from RPi clients
-        if tick == 5:
-            let rpi2_info = create_secure_message("Temp: 45C, Load: 0.45", SMP_SECRET, SMP_OTP_PASS, SMP_OTP_SEED, 1, 0)
-            register_client(1, "192.168.1.20", 42001, "RPi2")
-            update_client_info(1, "Temp: 45C, Load: 0.45")
-        
-        if tick == 8:
-            let rpi4_info = create_secure_message("Temp: 52C, Load: 0.78, Available: 8GB", SMP_SECRET, SMP_OTP_PASS, SMP_OTP_SEED, 2, 0)
-            register_client(2, "192.168.1.30", 42002, "RPi4")
-            update_client_info(2, "Temp: 52C, Load: 0.78, Available: 8GB")
-        
-        # Periodic broadcast to all clients
-        if tick % 20 == 0:
-            let bc_msg = "Cluster heartbeat at tick " + str(tick)
-            broadcast_to_all(bc_msg, SMP_SECRET, SMP_OTP_PASS, SMP_OTP_SEED)
-    
-    print("")
-    print("=== Relay Complete ===")
+proc json_encode(val):
+    let t = type(val)
+    if t == "nil":
+        return "null"
+    if t == "number":
+        return str(val)
+    if t == "string":
+        return DQ + json_escape(val) + DQ
+    if t == "array":
+        let parts = ["["]
+        for i in range(len(val)):
+            if i > 0: push(parts, ",")
+            push(parts, json_encode(val[i]))
+        push(parts, "]")
+        return join(parts, "")
+    if t == "dict":
+        let parts = ["{"]
+        let keys = dict_keys(val)
+        for i in range(len(keys)):
+            if i > 0: push(parts, ",")
+            push(parts, DQ + keys[i] + DQ + ":")
+            push(parts, json_encode(val[keys[i]]))
+        push(parts, "}")
+        return join(parts, "")
+    return DQ + json_escape(str(val)) + DQ
 
-run_orangepi_relay()
+proc json_decode(raw):
+    if raw == nil or len(raw) == 0:
+        return nil
+    let i = 0
+    let n = len(raw)
+    while i < n and (raw[i] == " " or raw[i] == chr(10) or raw[i] == chr(13) or raw[i] == chr(9)):
+        i = i + 1
+    if raw[i] != "{":
+        return nil
+    let result = {}
+    i = i + 1
+    while i < n and raw[i] != "}":
+        while i < n and (raw[i] == " " or raw[i] == chr(10) or raw[i] == chr(13) or raw[i] == chr(9) or raw[i] == ","):
+            i = i + 1
+        if raw[i] == "}":
+            break
+        if raw[i] != DQ:
+            return nil
+        i = i + 1
+        let key = ""
+        while i < n and raw[i] != DQ:
+            if raw[i] == chr(92):
+                i = i + 1
+            key = key + raw[i]
+            i = i + 1
+        i = i + 1
+        while i < n and (raw[i] == " " or raw[i] == ":"):
+            i = i + 1
+        if raw[i] == DQ:
+            i = i + 1
+            let val_str = ""
+            while i < n and raw[i] != DQ:
+                if raw[i] == chr(92):
+                    i = i + 1
+                val_str = val_str + raw[i]
+                i = i + 1
+            i = i + 1
+            result[key] = val_str
+        elif raw[i] == "[":
+            i = i + 1
+            let arr = []
+            while i < n:
+                while i < n and (raw[i] == " " or raw[i] == "," or raw[i] == chr(10) or raw[i] == chr(13)):
+                    i = i + 1
+                if i >= n or raw[i] == "]":
+                    break
+                if raw[i] == DQ:
+                    i = i + 1
+                    let s = ""
+                    while i < n and raw[i] != DQ:
+                        s = s + raw[i]
+                        i = i + 1
+                    i = i + 1
+                    push(arr, s)
+                else:
+                    let num_str = ""
+                    while i < n and ((raw[i] >= "0" and raw[i] <= "9") or raw[i] == "." or raw[i] == "-"):
+                        num_str = num_str + raw[i]
+                        i = i + 1
+                    if len(num_str) > 0:
+                        push(arr, tonumber(num_str))
+            i = i + 1
+            result[key] = arr
+        elif raw[i] == "t" or raw[i] == "f":
+            if raw[i] == "t":
+                result[key] = 1
+                i = i + 4
+            else:
+                result[key] = 0
+                i = i + 5
+        elif raw[i] == "n":
+            result[key] = nil
+            i = i + 4
+        else:
+            let num_str = ""
+            while i < n and ((raw[i] >= "0" and raw[i] <= "9") or raw[i] == "." or raw[i] == "-" or raw[i] == "+" or raw[i] == "e" or raw[i] == "E"):
+                num_str = num_str + raw[i]
+                i = i + 1
+            if len(num_str) > 0:
+                result[key] = tonumber(num_str)
+    return result
+
+let clients = {}
+let clients_mutex = thread.mutex()
+
+proc handle_client(client_fd):
+    let raw = tcp.recv(client_fd, 4096)
+
+    if raw == nil or len(raw) == 0:
+        tcp.close(client_fd)
+        return
+    end
+
+    let msg = json_decode(raw)
+    if msg == nil:
+        tcp.sendall(client_fd, "{\"error\":\"bad json\"}")
+        tcp.close(client_fd)
+        return
+    end
+
+    let cid = msg["client_id"]
+    let platform = msg["platform"]
+    let info_str = msg["info"]
+
+    thread.lock(clients_mutex)
+    clients[str(cid)] = {"id": cid, "platform": platform, "info": info_str, "last_seen": clock()}
+    let count = len(dict_keys(clients))
+    thread.unlock(clients_mutex)
+
+    print("[HEARTBEAT] " + platform + " (id=" + str(cid) + ") -> " + info_str)
+
+    let resp = "{\"status\":\"ok\",\"node_count\":" + str(count) + ",\"server_ts\":" + str(clock()) + "}"
+    tcp.sendall(client_fd, resp)
+    tcp.close(client_fd)
+end
+
+proc status_printer(_):
+    while true:
+        thread.sleep(60)
+        thread.lock(clients_mutex)
+        print("=== OrangePi Relay Status ===")
+        let ids = dict_keys(clients)
+        print("Connected clients: " + str(len(ids)))
+        for i in range(len(ids)):
+            let c = clients[ids[i]]
+            print("  [" + c["platform"] + "] id=" + str(c["id"]) + " last_seen=" + str(c["last_seen"]) + " -> " + c["info"])
+        end
+        thread.unlock(clients_mutex)
+    end
+end
+
+proc main():
+    let port_str = sys.getenv("SMP_PORT")
+    let port = RELAY_PORT
+    if port_str != nil:
+        port = tonumber(port_str)
+    end
+
+    print("=== OrangePi Relay Server (Real TCP) ===")
+    print("Listening on 0.0.0.0:" + str(port))
+
+    let listener = tcp.listen("0.0.0.0", port)
+    if listener == -1:
+        print("FATAL: Cannot listen on port " + str(port))
+        return
+    end
+
+    thread.spawn(status_printer, nil)
+
+    while true:
+        let client_fd = tcp.accept(listener)
+        if client_fd != -1:
+            thread.spawn(handle_client, client_fd)
+        end
+    end
+
+    tcp.close(listener)
+end
+
+main()

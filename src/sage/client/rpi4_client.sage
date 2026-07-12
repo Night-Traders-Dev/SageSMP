@@ -1,96 +1,225 @@
-# RPi4 Client
-# ===========
-# OrangePi relay client for Raspberry Pi 4
-
 gc_disable()
 
-# ============================================================================
-# Pure Sage Hash
-# ============================================================================
+import tcp
+import thread
+import sys
+import io
 
-proc simple_hash(value, seed):
-    let h = seed
-    for i in range(len(str(value))):
-        h = ((h * 33) + ord(str(value)[i])) % 1000000007
-    return h
+let ORANGEPI_HOST = "192.168.1.10"
+let ORANGEPI_PORT = 42000
+let CLIENT_ID = 2
+let HEARTBEAT_INTERVAL = 60
 
-proc generate_otp_key(passphrase, length, seed):
-    let key = []
-    for i in range(length):
-        let h = simple_hash(passphrase + str(i), seed)
-        push(key, (h % 255) - 127)
-    return key
+let DQ = chr(34)
 
-proc sign_message(message, secret_key, node_id):
-    let sig = simple_hash(message + secret_key + str(node_id), 12345)
-    let sig2 = simple_hash(str(sig), 54321)
-    return [sig, sig2]
+proc json_escape(s):
+    let r = replace(s, chr(92), chr(92) + chr(92))
+    r = replace(r, chr(34), chr(92) + chr(34))
+    return r
 
-proc otp_encrypt(message, otp_key):
-    let encrypted = ""
-    for i in range(len(str(message))):
-        let m_byte = ord(str(message)[i])
-        let k_byte = otp_key[i % len(otp_key)]
-        encrypted = encrypted + chr((m_byte + k_byte) % 256)
-    return encrypted
+proc json_encode(val):
+    let t = type(val)
+    if t == "nil":
+        return "null"
+    if t == "number":
+        return str(val)
+    if t == "string":
+        return DQ + json_escape(val) + DQ
+    if t == "array":
+        let parts = ["["]
+        for i in range(len(val)):
+            if i > 0: push(parts, ",")
+            push(parts, json_encode(val[i]))
+        push(parts, "]")
+        return join(parts, "")
+    if t == "dict":
+        let parts = ["{"]
+        let keys = dict_keys(val)
+        for i in range(len(keys)):
+            if i > 0: push(parts, ",")
+            push(parts, DQ + keys[i] + DQ + ":")
+            push(parts, json_encode(val[keys[i]]))
+        push(parts, "}")
+        return join(parts, "")
+    return DQ + json_escape(str(val)) + DQ
 
-proc otp_decrypt(encrypted, otp_key):
-    let decrypted = ""
-    for i in range(len(str(encrypted))):
-        let e_byte = ord(str(encrypted)[i])
-        let k_byte = otp_key[i % len(otp_key)]
-        let d_byte = (e_byte - k_byte + 256) % 256
-        decrypted = decrypted + chr(d_byte)
-    return decrypted
-
-proc create_secure_message(message, secret_key, otp_pass, otp_seed, sender_id, recipient_id):
-    let key = generate_otp_key(otp_pass, len(str(message)), otp_seed)
-    let encrypted = otp_encrypt(message, key)
-    let sig = sign_message(encrypted, secret_key, sender_id)
-    return {
-        "payload": encrypted,
-        "otp": key,
-        "sig": sig,
-        "from": sender_id,
-        "to": recipient_id
-    }
-
-proc read_secure_message(msg, secret_key, otp_pass, otp_seed, expected_sender):
-    let valid = verify_signature(msg["payload"], msg["sig"], secret_key, expected_sender)
-    if not valid:
+proc json_decode(raw):
+    if raw == nil or len(raw) == 0:
         return nil
-    let key = generate_otp_key(otp_pass, len(str(msg["payload"])), otp_seed)
-    return otp_decrypt(msg["payload"], key)
+    let i = 0
+    let n = len(raw)
+    while i < n and (raw[i] == " " or raw[i] == chr(10) or raw[i] == chr(13) or raw[i] == chr(9)):
+        i = i + 1
+    if raw[i] != "{":
+        return nil
+    let result = {}
+    i = i + 1
+    while i < n and raw[i] != "}":
+        while i < n and (raw[i] == " " or raw[i] == chr(10) or raw[i] == chr(13) or raw[i] == chr(9) or raw[i] == ","):
+            i = i + 1
+        if raw[i] == "}":
+            break
+        if raw[i] != DQ:
+            return nil
+        i = i + 1
+        let key = ""
+        while i < n and raw[i] != DQ:
+            if raw[i] == chr(92):
+                i = i + 1
+            key = key + raw[i]
+            i = i + 1
+        i = i + 1
+        while i < n and (raw[i] == " " or raw[i] == ":"):
+            i = i + 1
+        if raw[i] == DQ:
+            i = i + 1
+            let val_str = ""
+            while i < n and raw[i] != DQ:
+                if raw[i] == chr(92):
+                    i = i + 1
+                val_str = val_str + raw[i]
+                i = i + 1
+            i = i + 1
+            result[key] = val_str
+        elif raw[i] == "[":
+            i = i + 1
+            let arr = []
+            while i < n:
+                while i < n and (raw[i] == " " or raw[i] == "," or raw[i] == chr(10) or raw[i] == chr(13)):
+                    i = i + 1
+                if i >= n or raw[i] == "]":
+                    break
+                if raw[i] == DQ:
+                    i = i + 1
+                    let s = ""
+                    while i < n and raw[i] != DQ:
+                        s = s + raw[i]
+                        i = i + 1
+                    i = i + 1
+                    push(arr, s)
+                else:
+                    let num_str = ""
+                    while i < n and ((raw[i] >= "0" and raw[i] <= "9") or raw[i] == "." or raw[i] == "-"):
+                        num_str = num_str + raw[i]
+                        i = i + 1
+                    if len(num_str) > 0:
+                        push(arr, tonumber(num_str))
+            i = i + 1
+            result[key] = arr
+        elif raw[i] == "t" or raw[i] == "f":
+            if raw[i] == "t":
+                result[key] = 1
+                i = i + 4
+            else:
+                result[key] = 0
+                i = i + 5
+        elif raw[i] == "n":
+            result[key] = nil
+            i = i + 4
+        else:
+            let num_str = ""
+            while i < n and ((raw[i] >= "0" and raw[i] <= "9") or raw[i] == "." or raw[i] == "-" or raw[i] == "+" or raw[i] == "e" or raw[i] == "E"):
+                num_str = num_str + raw[i]
+                i = i + 1
+            if len(num_str) > 0:
+                result[key] = tonumber(num_str)
+    return result
 
-proc verify_signature(message, signature, secret_key, node_id):
-    let expected = sign_message(message, secret_key, node_id)
-    return signature[0] == expected[0] and signature[1] == expected[1]
+proc read_sys_file(path):
+    if not io.exists(path):
+        return nil
+    return io.readfile(path)
 
-# ============================================================================
-# RPi4 Info Collection (simulated)
-# ============================================================================
+proc stripnl(s):
+    return replace(replace(s, chr(10), ""), chr(13), "")
 
 proc get_cpu_temp():
-    # Simulated - in real implementation read from /sys/class/thermal/thermal_zone0/temp
-    return 52 + (clock() % 8)
+    let raw = read_sys_file("/sys/class/thermal/thermal_zone0/temp")
+    if raw != nil:
+        let cleaned = stripnl(raw)
+        let millideg = tonumber(cleaned)
+        if millideg != nil:
+            return millideg / 1000.0
+        end
+    end
+    return 45.0 + (clock() % 5)
 
 proc get_cpu_load():
-    # Simulated - in real implementation read from /proc/loadavg
-    return 0.7 + (clock() % 20) / 100.0
+    let raw = read_sys_file("/proc/loadavg")
+    if raw != nil:
+        let parts = []
+        let cur = ""
+        for i in range(len(raw)):
+            if raw[i] == " ":
+                push(parts, cur)
+                cur = ""
+            else:
+                cur = cur + raw[i]
+        if len(cur) > 0:
+            push(parts, cur)
+        if len(parts) >= 1:
+            let load = tonumber(parts[0])
+            if load != nil:
+                return load
+            end
+        end
+    end
+    return 0.4 + (clock() % 10) / 100.0
 
 proc get_memory_info():
-    # RPi4 typically has 4GB or 8GB RAM
-    let available = 8192 - (clock() % 2048)
-    return "Available: " + str(available / 1024) + "GB"
+    let raw = read_sys_file("/proc/meminfo")
+    if raw != nil:
+        let lines = []
+        let cur = ""
+        for i in range(len(raw)):
+            if raw[i] == chr(10):
+                push(lines, cur)
+                cur = ""
+            else:
+                cur = cur + raw[i]
+        if len(cur) > 0:
+            push(lines, cur)
+        if len(lines) >= 2:
+            let mem_avail = lines[1]
+            let parts = []
+            cur = ""
+            for i in range(len(mem_avail)):
+                if mem_avail[i] == " ":
+                    if len(cur) > 0:
+                        push(parts, cur)
+                    cur = ""
+                else:
+                    cur = cur + mem_avail[i]
+            if len(cur) > 0:
+                push(parts, cur)
+            if len(parts) >= 2:
+                return "Available: " + parts[1] + "kB"
+            end
+        end
+    end
+    return "Available: 768MB"
 
 proc get_gpu_temp():
-    return 48 + (clock() % 7)
+    let raw = read_sys_file("/sys/class/thermal/thermal_zone1/temp")
+    if raw != nil:
+        let cleaned = stripnl(raw)
+        let millideg = tonumber(cleaned)
+        if millideg != nil:
+            return "GPU: " + str(millideg / 1000.0) + "C"
+        end
+    end
+    return "GPU: N/A"
 
 proc get_throttling():
-    let t = "normal"
-    if clock() % 15 == 0:
-        t = "throttled"
-    return t
+    let raw = read_sys_file("/sys/devices/platform/soc/soc:firmware/get_throttled")
+    if raw != nil:
+        let cleaned = stripnl(raw)
+        let val = tonumber(cleaned)
+        if val != nil and val > 0:
+            return "THROTTLED"
+        end
+    end
+    return "OK"
 
 proc get_rpi4_info():
     let temp = get_cpu_temp()
@@ -98,49 +227,55 @@ proc get_rpi4_info():
     let mem = get_memory_info()
     let gpu = get_gpu_temp()
     let throttle = get_throttling()
-    return "Temp: " + str(temp) + "C, Load: " + str(load) + ", " + mem + ", GPU: " + str(gpu) + "C, Throttling: " + throttle
+    return "Temp: " + str(temp) + "C, Load: " + str(load) + ", " + mem + ", " + gpu + ", " + throttle
 
-# ============================================================================
-# OrangePi Relay Connection
-# ============================================================================
+proc send_heartbeat():
+    let host = ORANGEPI_HOST
+    let host_override = sys.getenv("SMP_HOST")
+    if host_override != nil:
+        host = host_override
+    end
+    let port = ORANGEPI_PORT
+    let port_str = sys.getenv("SMP_PORT")
+    if port_str != nil:
+        port = tonumber(port_str)
+    end
 
-let SMP_SECRET = "orangepi_cluster_secret_2026"
-let SMP_OTP_PASS = "cluster_otp_passphrase"
-let SMP_OTP_SEED = 42424
-let ORANGEPI_HOST = "192.168.1.10"
-let ORANGEPI_PORT = 42000
-let CLIENT_ID = 2
+    let fd = tcp.connect(host, port)
+    if fd == -1:
+        print("[ERROR] Cannot connect to OrangePi at " + host + ":" + str(port))
+        return
+    end
 
-proc send_info_to_orangepi(message):
-    let envelope = create_secure_message(message, SMP_SECRET, SMP_OTP_PASS, SMP_OTP_SEED, CLIENT_ID, 0)
-    print("Sending to OrangePi: " + str(message))
-    print("  Encrypted: " + envelope["payload"])
-    return envelope
+    let info = get_rpi4_info()
+    let msg = {"client_id": CLIENT_ID, "platform": "RPi4", "info": info, "timestamp": clock()}
+    tcp.sendall(fd, json_encode(msg))
 
-# ============================================================================
-# Main Loop - Periodic Info Sharing
-# ============================================================================
+    let raw = tcp.recv(fd, 4096)
+    if raw != nil:
+        let resp = json_decode(raw)
+        if resp != nil:
+            print("[HEARTBEAT OK] nodes=" + str(resp["node_count"]) + " ts=" + str(resp["server_ts"]))
+        else:
+            print("[WARN] Bad response: " + raw)
+        end
+    else:
+        print("[WARN] No response from OrangePi")
+    end
 
-proc run_rpi4_client():
-    print("=== RPi4 Client Starting ===")
-    print("Connecting to OrangePi at " + ORANGEPI_HOST + ":" + str(ORANGEPI_PORT))
+    tcp.close(fd)
+end
+
+proc main():
+    print("=== RPi4 Client Starting (Real TCP) ===")
+    print("Target: " + ORANGEPI_HOST + ":" + str(ORANGEPI_PORT))
+    print("Heartbeat interval: " + str(HEARTBEAT_INTERVAL) + "s")
     print("")
-    
-    let tick = 0
-    while tick < 50:
-        tick = tick + 1
-        
-        # Send periodic info every 5 ticks (simulated seconds)
-        if tick % 5 == 0:
-            let info = get_rpi4_info()
-            send_info_to_orangepi(info)
-            print("  -> Sent at tick " + str(tick))
-        
-        # Simulate receiving broadcast from OrangePi
-        if tick % 20 == 0:
-            print("Received broadcast from OrangePi: heartbeat tick " + str(tick * 2))
-    
-    print("")
-    print("=== RPi4 Client Complete ===")
 
-run_rpi4_client()
+    while true:
+        send_heartbeat()
+        thread.sleep(HEARTBEAT_INTERVAL)
+    end
+end
+
+main()
