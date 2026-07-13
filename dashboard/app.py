@@ -5,10 +5,12 @@ import asyncio
 import json
 import os
 import re
+import pty
+import fcntl
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -16,7 +18,8 @@ import uvicorn
 app = FastAPI(title="SageSMP Dashboard")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-SAGEMAP_DIR = Path.home() / "SageSMP"
+# Resolve repository root dynamically relative to dashboard/app.py
+SAGEMAP_DIR = Path(__file__).resolve().parents[1]
 BIN_DIR = SAGEMAP_DIR / "bin"
 LOG_DIR = SAGEMAP_DIR / "logs"
 MAX_LOGS = 1000
@@ -26,28 +29,53 @@ MAX_SERVICE_LOG = 10000
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SERVICE_LOG_FILE = LOG_DIR / "service_log.jsonl"
 
+# Read host and port configuration from environment variables
+SMP_HOST = os.getenv("SMP_HOST", "192.168.254.44")
+SMP_PORT = os.getenv("SMP_PORT", "42000")
+
 def load_service_log():
     if not SERVICE_LOG_FILE.exists():
         return []
     entries = []
-    with open(SERVICE_LOG_FILE) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
+    try:
+        with open(SERVICE_LOG_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+    except Exception:
+        pass
     return entries[-MAX_SERVICE_LOG:]
 
+write_count = 0
+
 def append_service_log(entry):
-    entries = load_service_log()
-    entries.append(entry)
-    if len(entries) > MAX_SERVICE_LOG:
-        entries = entries[-MAX_SERVICE_LOG:]
-    with open(SERVICE_LOG_FILE, "w") as f:
-        for e in entries:
-            f.write(json.dumps(e) + "\n")
+    global write_count
+    # Append in memory
+    state["service_logs"].append(entry)
+    if len(state["service_logs"]) > MAX_SERVICE_LOG:
+        state["service_logs"] = state["service_logs"][-MAX_SERVICE_LOG:]
+    
+    # Append to file (O(1))
+    try:
+        with open(SERVICE_LOG_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        add_event("error", "dashboard", f"Failed to write service log: {e}")
+        
+    # Periodic truncation (every 100 writes) to prevent unbound file growth
+    write_count += 1
+    if write_count >= 100:
+        write_count = 0
+        try:
+            with open(SERVICE_LOG_FILE, "w") as f:
+                for e in state["service_logs"]:
+                    f.write(json.dumps(e) + "\n")
+        except Exception as e:
+            add_event("error", "dashboard", f"Failed to rotate service log: {e}")
 
 state = {
     "relay": {"name": "OrangePi Relay", "proc": None, "logs": [], "status": "stopped", "started_at": None},
@@ -57,7 +85,27 @@ state = {
     "telemetry": {"pi2": {}, "pi4": {}},
     "services": {"pi2": {}, "pi4": {}},
     "compiles": [],
+    "service_logs": [],
 }
+
+def init_state_from_logs():
+    service_entries = load_service_log()
+    state["service_logs"] = service_entries
+    for e in service_entries:
+        entry_type = e.get("type")
+        platform = e.get("platform")
+        data = e.get("data", {})
+        ts = e.get("timestamp")
+        if entry_type == "SERVICES":
+            node_key = "pi2" if "RPi2" in platform else "pi4"
+            state["services"][node_key] = data
+        elif entry_type == "COMPILE":
+            state["compiles"].append({"platform": platform, "data": data, "timestamp": ts})
+    if len(state["compiles"]) > 50:
+        state["compiles"] = state["compiles"][-50:]
+
+# Load historical state on startup
+init_state_from_logs()
 
 def add_event(typ, source, message):
     entry = {"type": typ, "source": source, "message": message, "timestamp": datetime.now().isoformat()}
@@ -153,13 +201,13 @@ async def stream_reader(stream, node_name):
         elif "=== " in line and "Status" in line:
             add_event("status", node_name, line)
 
-async def start_node(node_name, cmd, cwd=None):
+async def start_node(node_name, cmd, cwd=None, env=None):
     n = state[node_name]
     if n["proc"] and n["proc"].returncode is None:
         return
     try:
         n["proc"] = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd, env=env
         )
         n["status"] = "running"
         n["started_at"] = datetime.now().isoformat()
@@ -195,7 +243,7 @@ async def stop_node(node_name):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/api/status")
 async def get_status():
@@ -225,8 +273,7 @@ async def get_status():
 
 @app.get("/api/service-log")
 async def get_service_log(limit: int = 100):
-    entries = load_service_log()
-    return entries[-limit:]
+    return state["service_logs"][-limit:]
 
 @app.get("/api/compiles")
 async def get_compiles():
@@ -252,11 +299,17 @@ async def get_events():
 @app.post("/api/start")
 async def start_all():
     sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
-    await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR))
+    
+    # Expose port environment to relay
+    env = os.environ.copy()
+    env["SMP_PORT"] = str(SMP_PORT)
+    await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
     await asyncio.sleep(0.5)
-    await start_node("pi2", ["ssh", "pi2", "cd ~/SageSMP && exec env SMP_HOST=192.168.254.44 stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+    
+    # Start clients with SSH BatchMode for reliability
+    await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
     await asyncio.sleep(0.5)
-    await start_node("pi4", ["ssh", "pi4", "cd ~/SageSMP && exec env SMP_HOST=192.168.254.44 stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+    await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
     return {"status": "ok"}
 
 @app.post("/api/stop")
@@ -266,29 +319,256 @@ async def stop_all():
     return {"status": "ok"}
 
 @app.get("/api/stream")
-async def stream():
+async def stream(request: Request):
     async def event_generator():
         last_counts = {n: 0 for n in ["relay", "pi2", "pi4"]}
         last_events = 0
-        while True:
-            data = {"nodes": {}, "events": []}
-            for name in ["relay", "pi2", "pi4"]:
-                logs = state[name]["logs"]
-                new_logs = logs[last_counts[name]:]
-                last_counts[name] = len(logs)
-                data["nodes"][name] = {
-                    "status": state[name]["status"],
-                    "new_logs": [l["line"] for l in new_logs[-15:]],
-                }
-            new_events = state["events"][last_events:]
-            last_events = len(state["events"])
-            data["events"] = [{"source": e["source"], "message": e["message"], "type": e["type"]} for e in new_events[-5:]]
-            data["telemetry"] = state["telemetry"]
-            data["services"] = state["services"]
-            data["compiles"] = state["compiles"][-3:]
-            yield f"data: {json.dumps(data)}\n\n"
-            await asyncio.sleep(0.3)
+        last_service_logs = 0
+        try:
+            while True:
+                # Terminate loop cleanly if client disconnects
+                if await request.is_disconnected():
+                    break
+                
+                data = {"nodes": {}, "events": [], "service_logs": []}
+                for name in ["relay", "pi2", "pi4"]:
+                    logs = state[name]["logs"]
+                    new_logs = logs[last_counts[name]:]
+                    last_counts[name] = len(logs)
+                    
+                    pid = state[name]["proc"].pid if state[name]["proc"] and state[name]["proc"].returncode is None else None
+                    data["nodes"][name] = {
+                        "status": state[name]["status"],
+                        "pid": pid,
+                        "log_count": len(logs),
+                        "new_logs": [l["line"] for l in new_logs[-15:]],
+                    }
+                
+                new_events = state["events"][last_events:]
+                last_events = len(state["events"])
+                data["events"] = [{"source": e["source"], "message": e["message"], "type": e["type"]} for e in new_events[-5:]]
+                
+                new_svc_logs = state["service_logs"][last_service_logs:]
+                last_service_logs = len(state["service_logs"])
+                data["service_logs"] = new_svc_logs
+                
+                data["telemetry"] = state["telemetry"]
+                data["services"] = state["services"]
+                data["compiles"] = state["compiles"][-5:]
+                
+                yield f"data: {json.dumps(data)}\n\n"
+                await asyncio.sleep(0.3)
+        except asyncio.CancelledError:
+            pass
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.websocket("/ws/terminal")
+async def websocket_terminal(websocket: WebSocket):
+    await websocket.accept()
+    mode = "sage"
+    prompt = "sage> "
+    
+    # Send initial welcome
+    await websocket.send_json({
+        "type": "output",
+        "content": "Welcome to SageSMP Cluster Terminal Console!\r\nType 'help' for a list of available commands.\r\n\r\n" + prompt
+    })
+    
+    active_pty = None
+    
+    try:
+        while True:
+            # We receive message from client
+            msg_str = await websocket.receive_text()
+            msg = json.loads(msg_str)
+            msg_type = msg.get("type")
+            content = msg.get("content", "")
+            
+            if mode == "interactive" and active_pty:
+                if msg_type == "key":
+                    try:
+                        os.write(active_pty["fd"], content.encode())
+                    except Exception:
+                        pass
+            elif mode == "sage":
+                if msg_type == "command":
+                    command = content.strip()
+                    if not command:
+                        await websocket.send_json({"type": "output", "content": prompt})
+                        continue
+                    
+                    if command == "help":
+                        output = (
+                            "Available commands:\r\n"
+                            "  help             - Show this help menu\r\n"
+                            "  status           - Show status of all cluster nodes\r\n"
+                            "  info <device>    - Display info for a device (OrangePi, pi2, pi4)\r\n"
+                            "  start <device>   - Start a device node (relay, pi2, pi4, all)\r\n"
+                            "  stop <device>    - Stop a device node (relay, pi2, pi4, all)\r\n"
+                            "  sc <device>      - Connect to device shell (sc OrangePi, sc pi2, sc pi4)\r\n"
+                            "  clear            - Clear terminal screen\r\n"
+                        )
+                        await websocket.send_json({"type": "output", "content": output + prompt})
+                        
+                    elif command == "status":
+                        output = "Cluster Node Status Summary:\r\n"
+                        output += "---------------------------------------------------------\r\n"
+                        output += " Node Name    | Status   | PID    | Active Logs\r\n"
+                        output += "---------------------------------------------------------\r\n"
+                        for name in ["relay", "pi2", "pi4"]:
+                            n = state[name]
+                            pid = n["proc"].pid if n["proc"] and n["proc"].returncode is None else "-"
+                            status = n["status"]
+                            log_count = len(n["logs"])
+                            output += f" {n['name']:<12} | {status:<8} | {pid:<6} | {log_count:<11}\r\n"
+                        output += "---------------------------------------------------------\r\n"
+                        await websocket.send_json({"type": "output", "content": output + prompt})
+                        
+                    elif command.startswith("info "):
+                        device = command[5:].strip()
+                        if device.lower() in ("orangepi", "orange pi", "local"):
+                            proc = await asyncio.create_subprocess_shell(
+                                "uptime && free -h && df -h / && uname -a",
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                        elif device.lower() in ("pi2", "rpi2"):
+                            proc = await asyncio.create_subprocess_shell(
+                                "ssh -o BatchMode=yes pi2 'uptime && free -h && df -h / && uname -a'",
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                        elif device.lower() in ("pi4", "rpi4"):
+                            proc = await asyncio.create_subprocess_shell(
+                                "ssh -o BatchMode=yes pi4 'uptime && free -h && df -h / && uname -a'",
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                        else:
+                            await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
+                            continue
+                            
+                        await websocket.send_json({"type": "output", "content": f"Fetching info for {device}...\r\n"})
+                        stdout, stderr = await proc.communicate()
+                        out_str = stdout.decode(errors="replace").replace("\n", "\r\n")
+                        err_str = stderr.decode(errors="replace").replace("\n", "\r\n")
+                        if out_str:
+                            await websocket.send_json({"type": "output", "content": out_str + "\r\n"})
+                        if err_str:
+                            await websocket.send_json({"type": "output", "content": "Error:\r\n" + err_str + "\r\n"})
+                        await websocket.send_json({"type": "output", "content": prompt})
+                        
+                    elif command.startswith("start "):
+                        device = command[6:].strip().lower()
+                        if device == "all":
+                            await start_all()
+                            await websocket.send_json({"type": "output", "content": "Starting all nodes...\r\n\r\n" + prompt})
+                        elif device in state:
+                            if device == "relay":
+                                sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
+                                env = os.environ.copy()
+                                env["SMP_PORT"] = str(SMP_PORT)
+                                await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
+                            elif device == "pi2":
+                                await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+                            elif device == "pi4":
+                                await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+                            await websocket.send_json({"type": "output", "content": f"Starting {device}...\r\n\r\n" + prompt})
+                        else:
+                            await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
+                            
+                    elif command.startswith("stop "):
+                        device = command[5:].strip().lower()
+                        if device == "all":
+                            await stop_all()
+                            await websocket.send_json({"type": "output", "content": "Stopping all nodes...\r\n\r\n" + prompt})
+                        elif device in state:
+                            await stop_node(device)
+                            await websocket.send_json({"type": "output", "content": f"Stopping {device}...\r\n\r\n" + prompt})
+                        else:
+                            await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
+                            
+                    elif command == "clear":
+                        await websocket.send_json({"type": "output", "content": "\033[2J\033[H" + prompt})
+                        
+                    elif command.startswith("sc "):
+                        device = command[3:].strip()
+                        if device.lower() in ("orangepi", "orange pi", "local"):
+                            cmd = ["/bin/bash"]
+                            title = "OrangePi Local Shell"
+                        elif device.lower() in ("pi2", "rpi2"):
+                            cmd = ["ssh", "pi2"]
+                            title = "RPi2 SSH Shell"
+                        elif device.lower() in ("pi4", "rpi4"):
+                            cmd = ["ssh", "pi4"]
+                            title = "RPi4 SSH Shell"
+                        else:
+                            await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
+                            continue
+                            
+                        await websocket.send_json({"type": "output", "content": f"Connecting to {title}...\r\n"})
+                        await websocket.send_json({"type": "mode", "content": "interactive"})
+                        mode = "interactive"
+                        
+                        # Open PTY
+                        master_fd, slave_fd = pty.openpty()
+                        
+                        interactive_proc = await asyncio.create_subprocess_exec(
+                            *cmd,
+                            stdin=slave_fd,
+                            stdout=slave_fd,
+                            stderr=slave_fd,
+                            preexec_fn=os.setsid
+                        )
+                        os.close(slave_fd)
+                        
+                        active_pty = {"proc": interactive_proc, "fd": master_fd}
+                        
+                        # Read loop for PTY
+                        async def read_loop():
+                            loop = asyncio.get_running_loop()
+                            try:
+                                while True:
+                                    data = await loop.run_in_executor(None, os.read, master_fd, 4096)
+                                    if not data:
+                                        break
+                                    await websocket.send_json({"type": "output", "content": data.decode(errors="replace")})
+                            except Exception:
+                                pass
+                            finally:
+                                try:
+                                    os.close(master_fd)
+                                except Exception:
+                                    pass
+                                    
+                        asyncio.create_task(read_loop())
+                        
+                        # Wait for process to exit
+                        async def wait_process():
+                            nonlocal mode, active_pty
+                            await interactive_proc.wait()
+                            await websocket.send_json({"type": "mode", "content": "sage"})
+                            await websocket.send_json({"type": "output", "content": "\r\nConnection to shell closed.\r\n\r\n" + prompt})
+                            mode = "sage"
+                            active_pty = None
+                            
+                        asyncio.create_task(wait_process())
+                    else:
+                        await websocket.send_json({"type": "output", "content": f"Unknown command: {command}\r\n" + prompt})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if active_pty:
+            try:
+                active_pty["proc"].terminate()
+                await active_pty["proc"].wait()
+            except Exception:
+                pass
+            try:
+                os.close(active_pty["fd"])
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8081)
+

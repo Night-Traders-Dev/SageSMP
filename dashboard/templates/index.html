@@ -3,128 +3,266 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SageSMP Cluster Dashboard</title>
+<title>SageSMP Cluster Control Center</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  .heartbeat-pulse { animation: pulse 2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  .conn-line { stroke-dasharray:8 4; animation:dash 1s linear infinite; }
-  @keyframes dash { to{stroke-dashoffset:-24} }
-  .hb-active { stroke:#22c55e !important; stroke-width:3 !important; }
-  .log-entry { animation:fadeIn .3s ease-in; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
-  .service-card { min-height:100px; }
-  @media(max-width:640px){ .log-entry{font-size:10px} }
+  body {
+    font-family: 'Outfit', sans-serif;
+  }
+  .monospace-font {
+    font-family: 'Fira Code', monospace;
+  }
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+  }
+  .heartbeat-pulse { 
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+  }
+  @keyframes pulse { 
+    0%, 100% { opacity: 1; transform: scale(1); } 
+    50% { opacity: 0.15; transform: scale(0.9); } 
+  }
+  .conn-line { 
+    stroke-dasharray: 8 4; 
+    animation: dash 1.2s linear infinite; 
+  }
+  @keyframes dash { 
+    to { stroke-dashoffset: -24; } 
+  }
+  .hb-active { 
+    stroke: #10b981 !important; 
+    stroke-width: 3.5px !important; 
+    filter: drop-shadow(0 0 4px #10b981);
+  }
+  .log-entry { 
+    animation: fadeIn 0.25s ease-out; 
+  }
+  @keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(-3px); } 
+    to { opacity: 1; transform: translateY(0); } 
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.3);
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+  }
 </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
-<div class="container mx-auto p-2 sm:p-4 max-w-6xl">
+<body class="bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 text-slate-100 min-h-screen">
+<div class="container mx-auto p-4 md:p-6 max-w-6xl">
 
-  <header class="flex flex-wrap justify-between items-center mb-4 gap-2">
+  <!-- Header -->
+  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-slate-800 pb-4">
     <div>
-      <h1 class="text-xl sm:text-2xl font-bold">SageSMP Cluster</h1>
-      <p class="text-xs sm:text-sm text-gray-400">60s heartbeat &sdot; Pi-hole &sdot; Grafana &sdot; Prometheus</p>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+        <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">SageSMP Cluster Console</h1>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-400 mt-1">Real-Time Mailbox Routing Control &amp; Distributed Service Monitoring</p>
     </div>
-    <div class="flex gap-2">
-      <button id="btn-start" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 hover:bg-green-700 rounded font-semibold text-sm transition">Start</button>
-      <button id="btn-stop" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-700 rounded font-semibold text-sm transition">Stop</button>
+    <div class="flex gap-3 items-center">
+      <button id="btn-terminal" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 text-indigo-400 hover:text-indigo-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 transition duration-150 flex items-center justify-center" title="Open Terminal Console">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+      <button id="btn-start" class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold rounded-lg shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5 transition duration-150 text-sm">
+        Start Cluster
+      </button>
+      <button id="btn-stop" class="px-4 py-2 bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-semibold rounded-lg shadow-lg shadow-rose-500/20 transform hover:-translate-y-0.5 transition duration-150 text-sm">
+        Stop Cluster
+      </button>
     </div>
   </header>
 
-  <!-- Topology (hidden on very small) -->
-  <div class="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700 mb-4 hidden sm:block">
-    <div class="flex justify-between items-center mb-2">
-      <h2 class="text-base sm:text-lg font-semibold">Topology</h2>
-      <span id="hb-clock" class="text-xs text-gray-500">Last: --</span>
+  <!-- Topology SVG Panel -->
+  <div class="glass-panel rounded-xl p-4 md:p-6 mb-6 shadow-2xl">
+    <div class="flex justify-between items-center mb-4">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base sm:text-lg font-semibold tracking-wide text-indigo-200">Active Topology Map</h2>
+        <span class="px-2 py-0.5 text-[10px] rounded bg-indigo-500/20 text-indigo-300 uppercase tracking-widest monospace-font">Live</span>
+      </div>
+      <span id="hb-clock" class="text-xs text-slate-500 monospace-font">Last Sync: --:--:--</span>
     </div>
-    <svg viewBox="0 0 600 100" class="w-full max-w-lg mx-auto">
-      <circle id="node-relay" cx="300" cy="50" r="24" fill="#1e293b" stroke="#22c55e" stroke-width="3"/>
-      <text x="300" y="46" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="bold">OrangePi</text>
-      <text x="300" y="58" text-anchor="middle" fill="#94a3b8" font-size="7">Relay:42000</text>
-      <circle id="node-pi2" cx="110" cy="50" r="20" fill="#1e293b" stroke="#3b82f6" stroke-width="3"/>
-      <text x="110" y="47" text-anchor="middle" fill="#e2e8f0" font-size="8" font-weight="bold">RPi2</text>
-      <text x="110" y="57" text-anchor="middle" fill="#94a3b8" font-size="6">Pi-hole</text>
-      <circle id="node-pi4" cx="490" cy="50" r="20" fill="#1e293b" stroke="#a855f7" stroke-width="3"/>
-      <text x="490" y="47" text-anchor="middle" fill="#e2e8f0" font-size="8" font-weight="bold">RPi4</text>
-      <text x="490" y="57" text-anchor="middle" fill="#94a3b8" font-size="6">Graf+Prom</text>
-      <line id="conn-pi2" x1="130" y1="50" x2="276" y2="50" stroke="#475569" stroke-width="2" class="conn-line"/>
-      <line id="conn-pi4" x1="324" y1="50" x2="470" y2="50" stroke="#475569" stroke-width="2" class="conn-line"/>
-      <circle id="hb-pi2" cx="203" cy="50" r="4" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
-      <circle id="hb-pi4" cx="397" cy="50" r="4" fill="#22c55e" class="heartbeat-pulse" opacity="0"/>
-    </svg>
-    <div class="flex justify-center gap-4 sm:gap-6 mt-1 text-xs">
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi2"></span>RPi2 <span id="hb-time-pi2" class="text-gray-500">--</span></span>
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" id="indicator-pi4"></span>RPi4 <span id="hb-time-pi4" class="text-gray-500">--</span></span>
+    
+    <div class="w-full max-w-2xl mx-auto py-2">
+      <svg viewBox="0 0 600 120" class="w-full drop-shadow-2xl">
+        <defs>
+          <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        
+        <!-- Connection Lines -->
+        <line id="conn-pi2" x1="120" y1="60" x2="270" y2="60" stroke="#334155" stroke-width="2.5" class="conn-line"/>
+        <line id="conn-pi4" x1="330" y1="60" x2="480" y2="60" stroke="#334155" stroke-width="2.5" class="conn-line"/>
+        
+        <!-- Relay Node (OrangePi) -->
+        <circle id="node-relay" cx="300" cy="60" r="26" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+        <text x="300" y="56" text-anchor="middle" fill="#f8fafc" font-size="9" font-weight="bold">OrangePi</text>
+        <text x="300" y="67" text-anchor="middle" fill="#64748b" font-size="7">Relay:42000</text>
+        
+        <!-- Pi2 Node -->
+        <circle id="node-pi2" cx="90" cy="60" r="22" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+        <text x="90" y="57" text-anchor="middle" fill="#f8fafc" font-size="9" font-weight="bold">RPi2</text>
+        <text x="90" y="67" text-anchor="middle" fill="#64748b" font-size="6">Pi-hole</text>
+        
+        <!-- Pi4 Node -->
+        <circle id="node-pi4" cx="510" cy="60" r="22" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+        <text x="510" y="57" text-anchor="middle" fill="#f8fafc" font-size="9" font-weight="bold">RPi4</text>
+        <text x="510" y="67" text-anchor="middle" fill="#64748b" font-size="6">Graf+Prom</text>
+        
+        <!-- Pulse Anim Nodes -->
+        <circle id="hb-pi2" cx="195" cy="60" r="4.5" fill="#10b981" opacity="0" class="heartbeat-pulse"/>
+        <circle id="hb-pi4" cx="405" cy="60" r="4.5" fill="#10b981" opacity="0" class="heartbeat-pulse"/>
+      </svg>
+    </div>
+    
+    <div class="flex justify-center gap-6 mt-4 text-xs">
+      <span class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-slate-600 transition duration-300" id="indicator-pi2"></span>
+        <span class="font-medium text-slate-300">RPi2 Client</span>
+        <span id="hb-time-pi2" class="text-slate-500 monospace-font">--</span>
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-slate-600 transition duration-300" id="indicator-pi4"></span>
+        <span class="font-medium text-slate-300">RPi4 Client</span>
+        <span id="hb-time-pi4" class="text-slate-500 monospace-font">--</span>
+      </span>
     </div>
   </div>
 
-  <!-- Node cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-green-500">
+  <!-- Node Performance Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- OrangePi Card -->
+    <div class="glass-panel rounded-xl p-4 border-l-4 border-emerald-500 shadow-lg hover:shadow-emerald-500/5 transition">
       <div class="flex justify-between items-start">
-        <h2 class="text-sm sm:text-base font-semibold">OrangePi</h2>
-        <span id="badge-relay" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">OrangePi Relay</h2>
+        <span id="badge-relay" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
       </div>
-      <div id="telem-relay" class="mt-1 text-xs text-gray-400">Connected: 0</div>
-      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-relay">-</span> &sdot; <span id="logcount-relay">0</span> logs</div>
+      <div id="telem-relay" class="mt-3 text-sm font-bold text-slate-200">Connected Nodes: 0</div>
+      <div class="mt-3 flex justify-between text-xs text-slate-400 border-t border-slate-800/60 pt-2 font-mono">
+        <span>PID: <span id="pid-relay" class="text-slate-200">-</span></span>
+        <span>Logs: <span id="logcount-relay" class="text-slate-200">0</span></span>
+      </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-blue-500">
+    <!-- RPi2 Card -->
+    <div class="glass-panel rounded-xl p-4 border-l-4 border-blue-500 shadow-lg hover:shadow-blue-500/5 transition">
       <div class="flex justify-between items-start">
-        <h2 class="text-sm sm:text-base font-semibold">RPi2 (Pi-hole)</h2>
-        <span id="badge-pi2" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">RPi2 (Pi-hole)</h2>
+        <span id="badge-pi2" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
       </div>
-      <div id="telem-pi2" class="mt-1 text-xs text-gray-400">Waiting...</div>
-      <div id="svc-pi2" class="mt-1 text-xs text-green-400"></div>
-      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-pi2">-</span> &sdot; <span id="logcount-pi2">0</span> logs</div>
+      <div id="telem-pi2" class="mt-3 text-sm text-slate-400">Waiting for telemetry...</div>
+      <div id="svc-pi2" class="mt-1 text-xs text-blue-400 font-medium"></div>
+      <div class="mt-3 flex justify-between text-xs text-slate-400 border-t border-slate-800/60 pt-2 font-mono">
+        <span>PID: <span id="pid-pi2" class="text-slate-200">-</span></span>
+        <span>Logs: <span id="logcount-pi2" class="text-slate-200">0</span></span>
+      </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-3 border-l-4 border-purple-500">
+    <!-- RPi4 Card -->
+    <div class="glass-panel rounded-xl p-4 border-l-4 border-violet-500 shadow-lg hover:shadow-violet-500/5 transition">
       <div class="flex justify-between items-start">
-        <h2 class="text-sm sm:text-base font-semibold">RPi4 (Graf+Prom)</h2>
-        <span id="badge-pi4" class="px-2 py-0.5 text-xs rounded bg-yellow-600">stopped</span>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">RPi4 (Graf+Prom)</h2>
+        <span id="badge-pi4" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
       </div>
-      <div id="telem-pi4" class="mt-1 text-xs text-gray-400">Waiting...</div>
-      <div id="svc-pi4" class="mt-1 text-xs text-purple-400"></div>
-      <div class="mt-1 text-xs text-gray-500">PID: <span id="pid-pi4">-</span> &sdot; <span id="logcount-pi4">0</span> logs</div>
+      <div id="telem-pi4" class="mt-3 text-sm text-slate-400">Waiting for telemetry...</div>
+      <div id="svc-pi4" class="mt-1 text-xs text-violet-400 font-medium"></div>
+      <div class="mt-3 flex justify-between text-xs text-slate-400 border-t border-slate-800/60 pt-2 font-mono">
+        <span>PID: <span id="pid-pi4" class="text-slate-200">-</span></span>
+        <span>Logs: <span id="logcount-pi4" class="text-slate-200">0</span></span>
+      </div>
     </div>
   </div>
 
-  <!-- Services & Compile row -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 service-card">
-      <h2 class="text-sm sm:text-base font-semibold mb-2">Service Status</h2>
-      <div id="service-detail" class="text-xs text-gray-400 space-y-1">No service data yet</div>
+  <!-- Service Details & Compile Row -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Active Services status -->
+    <div class="glass-panel rounded-xl p-4 shadow-xl">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-3 border-b border-slate-850 pb-2">Active Services Status</h2>
+      <div id="service-detail" class="text-xs text-slate-300 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+        <div class="text-slate-500 italic">Waiting for service heartbeats...</div>
+      </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 service-card">
-      <h2 class="text-sm sm:text-base font-semibold mb-2">Cross-Compile History</h2>
-      <div id="compile-detail" class="text-xs text-gray-400 space-y-1">No compile data yet</div>
+    <!-- Build status -->
+    <div class="glass-panel rounded-xl p-4 shadow-xl">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-3 border-b border-slate-850 pb-2">Cross-Compile History</h2>
+      <div id="compile-detail" class="text-xs text-slate-300 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+        <div class="text-slate-500 italic">Waiting for compile results...</div>
+      </div>
     </div>
   </div>
 
-  <!-- Log & Events -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="text-sm sm:text-base font-semibold">Live Log</h2>
-        <button id="btn-clear-logs" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+  <!-- Logs & Events Section -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Console logs -->
+    <div class="glass-panel rounded-xl p-4 shadow-xl flex flex-col">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300">Live Console Output</h2>
+        <button id="btn-clear-logs" class="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-750 text-slate-300 rounded transition font-medium uppercase tracking-wider">Clear</button>
       </div>
-      <div id="log-container" class="bg-gray-950 rounded p-2 h-56 sm:h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
+      <div id="log-container" class="bg-slate-950/80 border border-slate-850 rounded-lg p-3 h-64 overflow-y-auto monospace-font text-xs leading-relaxed custom-scrollbar"></div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="text-sm sm:text-base font-semibold">Events</h2>
-        <button id="btn-clear-events" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+    <!-- Events stream -->
+    <div class="glass-panel rounded-xl p-4 shadow-xl flex flex-col">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300">Cluster Events</h2>
+        <button id="btn-clear-events" class="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-750 text-slate-300 rounded transition font-medium uppercase tracking-wider">Clear</button>
       </div>
-      <div id="event-container" class="bg-gray-950 rounded p-2 h-56 sm:h-72 overflow-y-auto font-mono text-xs leading-relaxed"></div>
+      <div id="event-container" class="bg-slate-950/80 border border-slate-850 rounded-lg p-3 h-64 overflow-y-auto monospace-font text-xs leading-relaxed custom-scrollbar"></div>
     </div>
   </div>
 
-  <!-- Service Log (full history) -->
-  <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-4">
-    <div class="flex justify-between items-center mb-2">
-      <h2 class="text-sm sm:text-base font-semibold">Service Log</h2>
-      <span class="text-xs text-gray-500">Rolling, last 10000 entries</span>
+  <!-- Terminal Modal Overlay -->
+  <div id="terminal-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-panel w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden border border-slate-700/80">
+      <!-- Modal Header -->
+      <div class="flex justify-between items-center px-4 py-3 bg-slate-900/90 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span class="font-semibold text-slate-200">SageSMP Interactive Terminal Console</span>
+          <span id="term-mode-badge" class="px-2 py-0.5 text-[9px] rounded font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400">SageShell</span>
+        </div>
+        <button id="btn-close-terminal" class="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <!-- Modal Body (Terminal) -->
+      <div class="p-4 bg-black/95">
+        <div id="terminal-screen" class="h-80 overflow-y-auto monospace-font text-xs text-green-450 leading-relaxed custom-scrollbar focus:outline-none" tabindex="0"></div>
+      </div>
+      <!-- Modal Footer -->
+      <div class="px-4 py-2.5 bg-slate-900/90 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
+        <span>Click inside to focus and type. Run 'help' to see commands.</span>
+        <span>Press Ctrl+C to send interrupt</span>
+      </div>
     </div>
-    <div id="service-log-container" class="bg-gray-950 rounded p-2 h-40 sm:h-48 overflow-y-auto font-mono text-xs leading-relaxed"></div>
+  </div>
+
+  <!-- Service Log (Rolling History) -->
+  <div class="glass-panel rounded-xl p-4 shadow-xl">
+    <div class="flex justify-between items-center mb-3 border-b border-slate-850 pb-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300">Rolling Service Event Log</h2>
+      <span class="text-[10px] text-slate-500 font-medium tracking-wide">Last 10,000 entries (Persistent)</span>
+    </div>
+    <div id="service-log-container" class="bg-slate-950/80 border border-slate-850 rounded-lg p-3 h-48 overflow-y-auto monospace-font text-[11px] leading-relaxed custom-scrollbar"></div>
   </div>
 </div>
 
@@ -132,177 +270,740 @@
 const logContainer = document.getElementById('log-container');
 const eventContainer = document.getElementById('event-container');
 const svcLogContainer = document.getElementById('service-log-container');
-const badgeEls = {relay:document.getElementById('badge-relay'),pi2:document.getElementById('badge-pi2'),pi4:document.getElementById('badge-pi4')};
-const pidEls = {relay:document.getElementById('pid-relay'),pi2:document.getElementById('pid-pi2'),pi4:document.getElementById('pid-pi4')};
-const lcEls = {relay:document.getElementById('logcount-relay'),pi2:document.getElementById('logcount-pi2'),pi4:document.getElementById('logcount-pi4')};
-const telemEls = {relay:document.getElementById('telem-relay'),pi2:document.getElementById('telem-pi2'),pi4:document.getElementById('telem-pi4')};
-const svcEls = {pi2:document.getElementById('svc-pi2'),pi4:document.getElementById('svc-pi4')};
-const hbPulse = {pi2:document.getElementById('hb-pi2'),pi4:document.getElementById('hb-pi4')};
-const hbTime = {pi2:document.getElementById('hb-time-pi2'),pi4:document.getElementById('hb-time-pi4')};
-const indicators = {pi2:document.getElementById('indicator-pi2'),pi4:document.getElementById('indicator-pi4')};
-const connLines = {pi2:document.getElementById('conn-pi2'),pi4:document.getElementById('conn-pi4')};
 
-const colorMap = {relay:'text-green-400',pi2:'text-blue-400',pi4:'text-purple-400',dashboard:'text-yellow-300'};
-const prefixMap = {relay:'[Relay]',pi2:'[RPi2]',pi4:'[RPi4]',dashboard:'[Sys]'};
-const typeColors = {system:'text-yellow-300',heartbeat:'text-green-300',heartbeat_ack:'text-cyan-300',services:'text-lime-300',compile:'text-pink-300',warning:'text-yellow-300',error:'text-red-400',status:'text-gray-400'};
+const badgeEls = {
+  relay: document.getElementById('badge-relay'),
+  pi2: document.getElementById('badge-pi2'),
+  pi4: document.getElementById('badge-pi4')
+};
+const pidEls = {
+  relay: document.getElementById('pid-relay'),
+  pi2: document.getElementById('pid-pi2'),
+  pi4: document.getElementById('pid-pi4')
+};
+const lcEls = {
+  relay: document.getElementById('logcount-relay'),
+  pi2: document.getElementById('logcount-pi2'),
+  pi4: document.getElementById('logcount-pi4')
+};
+const telemEls = {
+  relay: document.getElementById('telem-relay'),
+  pi2: document.getElementById('telem-pi2'),
+  pi4: document.getElementById('pi4-telemetry')
+};
+const svcEls = {
+  pi2: document.getElementById('svc-pi2'),
+  pi4: document.getElementById('svc-pi4')
+};
+const hbPulse = {
+  pi2: document.getElementById('hb-pi2'),
+  pi4: document.getElementById('hb-pi4')
+};
+const hbTime = {
+  pi2: document.getElementById('hb-time-pi2'),
+  pi4: document.getElementById('hb-time-pi4')
+};
+const indicators = {
+  pi2: document.getElementById('indicator-pi2'),
+  pi4: document.getElementById('indicator-pi4')
+};
+const connLines = {
+  pi2: document.getElementById('conn-pi2'),
+  pi4: document.getElementById('conn-pi4')
+};
 
-function badgeClass(s){return s==='running'?'bg-green-600':s==='stopped'?'bg-red-600':'bg-yellow-600'}
+const nodeRelayEl = document.getElementById('node-relay');
+const nodePi2El = document.getElementById('node-pi2');
+const nodePi4El = document.getElementById('node-pi4');
 
-function appendLine(con,src,text,cls){
-  if(!text)return;
-  const d=document.createElement('div');
-  d.className=(colorMap[src]||'text-gray-300')+' '+(cls||'')+' log-entry';
-  d.textContent=(prefixMap[src]||'['+src+']')+' '+text;
-  con.appendChild(d);
-  con.scrollTop=con.scrollHeight;
-  if(con.children.length>500)con.removeChild(con.firstChild);
-}
+const colorMap = {
+  relay: 'text-emerald-400',
+  pi2: 'text-sky-400',
+  pi4: 'text-violet-400',
+  dashboard: 'text-amber-400'
+};
+const prefixMap = {
+  relay: '[Relay]',
+  pi2: '[RPi2]',
+  pi4: '[RPi4]',
+  dashboard: '[Sys]'
+};
+const typeColors = {
+  system: 'text-amber-400 font-semibold',
+  heartbeat: 'text-emerald-400',
+  heartbeat_ack: 'text-cyan-400',
+  services: 'text-lime-400',
+  compile: 'text-rose-400',
+  warning: 'text-yellow-400',
+  error: 'text-red-400 font-bold',
+  status: 'text-slate-400'
+};
 
-function flashHB(name){
-  const p=hbPulse[name];if(p){p.setAttribute('opacity','1');setTimeout(()=>p.setAttribute('opacity','0'),2000)}
-  const ind=indicators[name];if(ind){ind.classList.add('heartbeat-pulse');setTimeout(()=>ind.classList.remove('heartbeat-pulse'),2000)}
-  const c=connLines[name];if(c){c.classList.add('hb-active');setTimeout(()=>c.classList.remove('hb-active'),2000)}
-  const now=Date.now();
-  if(hbTime[name])hbTime[name].textContent=new Date(now).toLocaleTimeString();
-  document.getElementById('hb-clock').textContent='Last: '+new Date(now).toLocaleTimeString();
-}
-
-function renderTelem(name,data){
-  const el=telemEls[name];if(!el)return;
-  if(name==='relay'){el.textContent=data&&data.node_count!==undefined?'Connected: '+data.node_count:'Connected: 0';return}
-  if(!data||!Object.keys(data).length){el.textContent='Waiting...';return}
-  const p=[];
-  if(data.temp!==undefined)p.push('Temp: '+data.temp+'C');
-  if(data.load!==undefined)p.push('Load: '+data.load);
-  if(data.memory!==undefined)p.push(data.memory);
-  if(data.gpu_temp!==undefined)p.push('GPU: '+data.gpu_temp+'C');
-  if(data.throttling!==undefined)p.push(data.throttling);
-  el.textContent=p.length?p.join(' | '):'No data';
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g,function(c){
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+// Safe HTML escaping helper
+function escapeHtml(s) {
+  if (s === undefined || s === null) return '';
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
 
-function renderSvc(name,data){
-  const el=svcEls[name];if(!el||!data)return;
-  if(name==='pi2'&&data.pihole_active){
-    const en=data.blocking==='enabled'?'&#x2713;':'&#x2717;';
-    el.innerHTML=en+' Pi-hole: '+data.pihole_active+' | blocking='+data.blocking;
-  }else if(name==='pi4'&&data.grafana){
-    el.textContent='Grafana: '+data.grafana+' v'+data.grafana_version+' | Prom: '+data.prometheus;
-  }
+function badgeClass(s) {
+  if (s === 'running') return 'px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+  if (s === 'stopped') return 'px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-rose-500/20 text-rose-400 border border-rose-500/30';
+  return 'px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30';
 }
 
-function renderServiceDetail(services){
-  const el=document.getElementById('service-detail');
-  let html='';
-  if(services.pi2&&services.pi2.pihole_active){
-    const d=services.pi2;
-    html+='<div class="text-blue-400"><b>RPi2 Pi-hole:</b> '+d.pihole_active+' | blocking='+d.blocking+' | listening='+d.listening+'</div>';
-  }
-  if(services.pi4&&services.pi4.grafana){
-    const d=services.pi4;
-    html+='<div class="text-purple-400"><b>RPi4 Grafana:</b> '+d.grafana+' v'+d.grafana_version+' | Prom: '+d.prometheus+'</div>';
-  }
-  if(!html)html='<div class="text-gray-500">Waiting for service data...</div>';
-  el.innerHTML=html;
-}
-
-function renderCompiles(compiles){
-  const el=document.getElementById('compile-detail');
-  if(!compiles||compiles.length===0){el.innerHTML='<div class="text-gray-500">No cross-compile results yet</div>';return}
-  let html='';
-  for(let i=compiles.length-1;i>=0;i--){
-    const c=compiles[i];
-    const d=c.data||{};
-    const status=d.status||'?';
-    const ts=c.timestamp?new Date(c.timestamp).toLocaleString():'?';
-    const exit=d.exit_code;
-    const dur=d.duration?d.duration+'s':'?';
-    html+='<div class="'+(status==='ok'?'text-green-400':'text-red-400')+'">'+ts+' - status='+status+' exit='+exit+' dur='+dur+'</div>';
-    if(d.output){
-      html+='<pre class="text-gray-500 text-[10px] whitespace-pre-wrap mt-1 mb-2 max-h-40 overflow-auto">'+escapeHtml(d.output)+'</pre>';
+function formatLiveLogLine(text) {
+  let formatted = text;
+  
+  // 1. Heartbeat
+  if (text.includes('[HEARTBEAT]')) {
+    const m = text.match(/\[HEARTBEAT\]\s+(\S+)\s+\(id=(\d+)\)\s+->\s+(.*)/);
+    if (m) {
+      const platform = m[1];
+      const id = m[2];
+      const details = m[3];
+      let cleanDetails = details.replace(/Temp:\s*([\d\.]+)C/, (match, temp) => `Temp: ${parseFloat(temp).toFixed(1)}°C`);
+      cleanDetails = cleanDetails.replace(/Load:\s*([\d\.]+)/, (match, load) => `Load: ${parseFloat(load).toFixed(2)}`);
+      return `🟢 HEARTBEAT: ${platform} (id=${id}) | ${cleanDetails}`;
     }
   }
-  el.innerHTML=html;
+  
+  // 2. Heartbeat OK
+  if (text.includes('[HEARTBEAT OK]')) {
+    const m = text.match(/\[HEARTBEAT\s+OK\]\s+nodes=(\d+)\s+ts=(\d+)/);
+    if (m) {
+      return `✅ HEARTBEAT OK | Nodes: ${m[1]} | TS: ${m[2]}`;
+    }
+  }
+  
+  // 3. Services
+  if (text.includes('[SERVICES]')) {
+    const m = text.match(/\[SERVICES\]\s+(\S+)\s+->\s+(.*)/);
+    if (m) {
+      const platform = m[1];
+      try {
+        const data = JSON.parse(m[2]);
+        const services = [];
+        if (data.grafana) services.push(`Grafana: ${data.grafana}`);
+        if (data.prometheus) services.push(`Prometheus: ${data.prometheus}`);
+        if (data.pihole_active) services.push(`Pi-hole: ${data.pihole_active}`);
+        return `⚙️ SERVICES: ${platform} -> ${services.join(', ')}`;
+      } catch(e) {}
+    }
+  }
+  
+  // 4. Compile
+  if (text.includes('[COMPILE]')) {
+    const m = text.match(/\[COMPILE\]\s+(\S+)\s+->\s+(.*)/);
+    if (m) {
+      const platform = m[1];
+      try {
+        const data = JSON.parse(m[2]);
+        const status = data.status || '?';
+        const duration = data.duration ? `${data.duration}s` : '?';
+        const exit = data.exit_code !== undefined ? data.exit_code : '?';
+        return `🛠️ COMPILE: ${platform} -> status: ${status} | duration: ${duration} | exit: ${exit}`;
+      } catch(e) {}
+    }
+  }
+  
+  // 5. Node status list (Status Printer output)
+  if (text.match(/^\s*\[\S+\]\s+id=/)) {
+    const m = text.match(/\s*\[(\S+)\]\s+id=(\d+)\s+last_seen=(\S+)\s+->\s+(.*)/);
+    if (m) {
+      let cleanDetails = m[4].replace(/Temp:\s*([\d\.]+)C/, (match, temp) => `Temp: ${parseFloat(temp).toFixed(1)}°C`);
+      cleanDetails = cleanDetails.replace(/Load:\s*([\d\.]+)/, (match, load) => `Load: ${parseFloat(load).toFixed(2)}`);
+      return `🖥️ Node ${m[1]} (id: ${m[2]}) | ${cleanDetails}`;
+    }
+  }
+
+  // 6. Header/Status separator
+  if (text.includes('===') && text.includes('Status')) {
+    return `📊 ${text.replace(/===/g, '').trim()}`;
+  }
+  
+  // 7. Connected clients
+  if (text.includes('Connected clients:')) {
+    return `👥 ${text}`;
+  }
+  
+  return formatted;
 }
 
-function renderSvcLog(entries){
-  if(!entries||entries.length===0)return;
-  for(const e of entries){
-    const d=document.createElement('div');
-    const ts=e.timestamp?new Date(e.timestamp).toLocaleString():'?';
-    const plat=e.platform||'?';
-    const typ=e.type||'?';
-    const dataStr=JSON.stringify(e.data||{}).substring(0,200);
-    d.className='text-gray-400 log-entry text-xs';
-    d.textContent='['+ts+'] ['+typ+'] '+plat+' -> '+dataStr;
+function formatEventLine(text) {
+  let formatted = text;
+  
+  // 1. System Events
+  if (text.includes('started')) {
+    return `🚀 ${text}`;
+  }
+  if (text.includes('exited') || text.includes('stopped')) {
+    return `🛑 ${text}`;
+  }
+  
+  // 2. Heartbeat OK (Clients acknowledging)
+  if (text.includes('[HEARTBEAT OK]')) {
+    const m = text.match(/nodes=(\d+)/);
+    if (m) {
+      return `📡 Heartbeat Acknowledged | Nodes: ${m[1]}`;
+    }
+  }
+  
+  // 3. Heartbeat from client (Relay receiving heartbeat)
+  if (text.includes('[HEARTBEAT]')) {
+    const m = text.match(/\[HEARTBEAT\]\s+(\S+)\s+\(id=(\d+)\)\s+->\s+(.*)/);
+    if (m) {
+      const platform = m[1];
+      const details = m[3];
+      let cleanDetails = details.replace(/Temp:\s*([\d\.]+)C/, (match, temp) => `Temp: ${parseFloat(temp).toFixed(1)}°C`);
+      cleanDetails = cleanDetails.replace(/Load:\s*([\d\.]+)/, (match, load) => `Load: ${parseFloat(load).toFixed(2)}`);
+      return `📥 Heartbeat from ${platform} | ${cleanDetails}`;
+    }
+  }
+  
+  // 4. Services
+  if (text.includes('services:')) {
+    const m = text.match(/(\S+)\s+services:\s+(.*)/);
+    if (m) {
+      const platform = m[1];
+      try {
+        const data = JSON.parse(m[2]);
+        const services = [];
+        if (data.grafana) services.push(`Grafana: ${data.grafana}`);
+        if (data.prometheus) services.push(`Prometheus: ${data.prometheus}`);
+        if (data.pihole_active) services.push(`Pi-hole: ${data.pihole_active}`);
+        return `⚙️ ${platform} Services: ${services.join(', ')}`;
+      } catch(e) {}
+    }
+  }
+  
+  // 5. Cross-compile
+  if (text.includes('Cross-compile')) {
+    return `🛠️ ${text}`;
+  }
+  
+  return formatted;
+}
+
+function appendLine(con, src, text, cls) {
+  if (!text) return;
+  const d = document.createElement('div');
+  d.className = 'py-0.5 border-b border-slate-900/40 ' + (colorMap[src] || 'text-slate-300') + ' ' + (cls || '') + ' log-entry';
+  
+  const spanPref = document.createElement('span');
+  spanPref.className = 'font-bold opacity-80 mr-2';
+  spanPref.textContent = prefixMap[src] || '[' + src + ']';
+  
+  const spanText = document.createElement('span');
+  if (con === logContainer) {
+    spanText.textContent = formatLiveLogLine(text);
+  } else if (con === eventContainer) {
+    spanText.textContent = formatEventLine(text);
+  } else {
+    spanText.textContent = text;
+  }
+  
+  d.appendChild(spanPref);
+  d.appendChild(spanText);
+  
+  con.appendChild(d);
+  con.scrollTop = con.scrollHeight;
+  if (con.children.length > 500) con.removeChild(con.firstChild);
+}
+
+function updateTopologyColors(name, status) {
+  const nodeEl = name === 'relay' ? nodeRelayEl : (name === 'pi2' ? nodePi2El : nodePi4El);
+  if (!nodeEl) return;
+  
+  if (status === 'running') {
+    nodeEl.setAttribute('stroke', name === 'relay' ? '#10b981' : (name === 'pi2' ? '#3b82f6' : '#8b5cf6'));
+    nodeEl.setAttribute('stroke-width', '3');
+    nodeEl.setAttribute('fill', '#020617');
+    if (name === 'relay') {
+      nodeEl.setAttribute('filter', 'url(#glow-green)');
+    }
+  } else {
+    nodeEl.setAttribute('stroke', '#475569');
+    nodeEl.setAttribute('stroke-width', '2');
+    nodeEl.setAttribute('fill', '#0f172a');
+    nodeEl.removeAttribute('filter');
+  }
+}
+
+function flashHB(name) {
+  const p = hbPulse[name];
+  if (p) {
+    p.setAttribute('opacity', '1');
+    setTimeout(() => p.setAttribute('opacity', '0'), 2000);
+  }
+  
+  const ind = indicators[name];
+  if (ind) {
+    ind.classList.remove('bg-slate-600', 'bg-red-500');
+    ind.classList.add('bg-emerald-500', 'heartbeat-pulse');
+    setTimeout(() => ind.classList.remove('heartbeat-pulse'), 2000);
+  }
+  
+  const c = connLines[name];
+  if (c) {
+    c.classList.add('hb-active');
+    setTimeout(() => c.classList.remove('hb-active'), 2000);
+  }
+  
+  const now = Date.now();
+  if (hbTime[name]) {
+    hbTime[name].textContent = new Date(now).toLocaleTimeString();
+  }
+  document.getElementById('hb-clock').textContent = 'Last Sync: ' + new Date(now).toLocaleTimeString();
+}
+
+function renderTelem(name, data) {
+  const el = document.getElementById('telem-' + name);
+  if (!el) return;
+  
+  if (name === 'relay') {
+    el.textContent = data && data.node_count !== undefined ? 'Connected Nodes: ' + data.node_count : 'Connected Nodes: 0';
+    return;
+  }
+  
+  if (!data || !Object.keys(data).length) {
+    el.textContent = 'Waiting for telemetry...';
+    return;
+  }
+  
+  // Safe rendering to prevent XSS
+  const parts = [];
+  if (data.temp !== undefined) parts.push('Temp: ' + escapeHtml(data.temp) + '°C');
+  if (data.load !== undefined) parts.push('Load: ' + escapeHtml(data.load));
+  if (data.memory !== undefined) parts.push(escapeHtml(data.memory));
+  if (data.gpu_temp !== undefined) parts.push('GPU: ' + escapeHtml(data.gpu_temp) + '°C');
+  if (data.throttling !== undefined) parts.push(escapeHtml(data.throttling));
+  
+  el.textContent = parts.length ? parts.join(' | ') : 'No data';
+}
+
+function renderSvc(name, data) {
+  const el = svcEls[name];
+  if (!el || !data) return;
+  
+  if (name === 'pi2' && data.pihole_active) {
+    const isEn = data.blocking === 'enabled';
+    el.textContent = 'Pi-hole: ' + escapeHtml(data.pihole_active) + ' | Blocking: ' + escapeHtml(data.blocking);
+  } else if (name === 'pi4' && data.grafana) {
+    el.textContent = 'Grafana: ' + escapeHtml(data.grafana) + ' | Prom: ' + escapeHtml(data.prometheus);
+  }
+}
+
+function renderServiceDetail(services) {
+  const el = document.getElementById('service-detail');
+  el.innerHTML = '';
+  
+  let hasData = false;
+  
+  if (services.pi2 && services.pi2.pihole_active) {
+    hasData = true;
+    const d = services.pi2;
+    const item = document.createElement('div');
+    item.className = 'p-2.5 rounded bg-blue-500/10 border border-blue-500/20';
+    item.innerHTML = '<b class="text-blue-400 font-semibold uppercase tracking-wider text-[10px] block mb-1">RPi2 Pi-hole Server</b>' +
+                     '<div class="grid grid-cols-2 gap-2 mt-1">' +
+                     '<div>Active: <span class="text-slate-200 font-mono">' + escapeHtml(d.pihole_active) + '</span></div>' +
+                     '<div>Blocking: <span class="text-slate-200 font-mono">' + escapeHtml(d.blocking) + '</span></div>' +
+                     '<div>Port listening: <span class="text-slate-200 font-mono">' + escapeHtml(d.listening) + '</span></div>' +
+                     '<div>FTL PID: <span class="text-slate-200 font-mono">' + escapeHtml(d.ftl_pid) + '</span></div>' +
+                     '</div>';
+    el.appendChild(item);
+  }
+  
+  if (services.pi4 && services.pi4.grafana) {
+    hasData = true;
+    const d = services.pi4;
+    const item = document.createElement('div');
+    item.className = 'p-2.5 rounded bg-violet-500/10 border border-violet-500/20';
+    item.innerHTML = '<b class="text-violet-400 font-semibold uppercase tracking-wider text-[10px] block mb-1">RPi4 Grafana &amp; Prometheus</b>' +
+                     '<div class="grid grid-cols-2 gap-2 mt-1">' +
+                     '<div>Grafana: <span class="text-slate-200 font-mono">' + escapeHtml(d.grafana) + ' (v' + escapeHtml(d.grafana_version) + ')</span></div>' +
+                     '<div>Prometheus: <span class="text-slate-200 font-mono">' + escapeHtml(d.prometheus) + '</span></div>' +
+                     '<div>Prom Main: <span class="text-slate-200 font-mono">' + escapeHtml(d.prometheus_main) + '</span></div>' +
+                     '<div>Uptime: <span class="text-slate-200 font-mono text-[10px] truncate block">' + escapeHtml(d.uptime) + '</span></div>' +
+                     '</div>';
+    el.appendChild(item);
+  }
+  
+  if (!hasData) {
+    el.innerHTML = '<div class="text-slate-500 italic">Waiting for service heartbeats...</div>';
+  }
+}
+
+function renderCompiles(compiles) {
+  const el = document.getElementById('compile-detail');
+  if (!compiles || compiles.length === 0) {
+    el.innerHTML = '<div class="text-slate-500 italic">Waiting for compile results...</div>';
+    return;
+  }
+  
+  el.innerHTML = '';
+  
+  for (let i = compiles.length - 1; i >= 0; i--) {
+    const c = compiles[i];
+    const d = c.data || {};
+    const status = d.status || '?';
+    const ts = c.timestamp ? new Date(c.timestamp).toLocaleString() : '?';
+    const exit = d.exit_code;
+    const dur = d.duration ? d.duration + 's' : '?';
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'p-2.5 rounded border mb-2 ' + 
+                      (status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300');
+                      
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center font-semibold text-[11px] mb-1';
+    header.innerHTML = '<span>Compile run: ' + escapeHtml(ts) + '</span>' +
+                       '<span class="uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900 text-[9px] ' + 
+                       (status === 'ok' ? 'text-emerald-400' : 'text-rose-400') + '">' + escapeHtml(status) + '</span>';
+                       
+    const info = document.createElement('div');
+    info.className = 'text-[10px] text-slate-400 flex gap-4';
+    info.innerHTML = '<span>Exit code: <b class="text-slate-300 monospace-font">' + escapeHtml(exit) + '</b></span>' +
+                     '<span>Duration: <b class="text-slate-300 monospace-font">' + escapeHtml(dur) + '</b></span>';
+                     
+    wrapper.appendChild(header);
+    wrapper.appendChild(info);
+    
+    if (d.output) {
+      const output = document.createElement('pre');
+      output.className = 'text-slate-500 text-[10px] whitespace-pre-wrap mt-2 p-1.5 bg-slate-950/60 rounded border border-slate-900 max-h-32 overflow-y-auto custom-scrollbar monospace-font';
+      output.textContent = d.output;
+      wrapper.appendChild(output);
+    }
+    
+    el.appendChild(wrapper);
+  }
+}
+
+function renderSvcLog(entries) {
+  if (!entries || entries.length === 0) return;
+  for (const e of entries) {
+    const d = document.createElement('div');
+    const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '?';
+    const plat = e.platform || '?';
+    const typ = e.type || '?';
+    const dataStr = JSON.stringify(e.data || {});
+    
+    d.className = 'py-1 border-b border-slate-900/30 text-slate-400 hover:text-slate-300 transition flex items-start gap-2 log-entry';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'text-slate-500 font-semibold';
+    timeSpan.textContent = '[' + ts + ']';
+    
+    const tagSpan = document.createElement('span');
+    tagSpan.className = 'px-1 py-0.5 text-[9px] rounded font-bold uppercase tracking-wider ' + 
+                      (typ === 'SERVICES' ? 'bg-blue-500/10 text-blue-400' : 'bg-rose-500/10 text-rose-400');
+    tagSpan.textContent = typ;
+    
+    const nodeSpan = document.createElement('span');
+    nodeSpan.className = 'font-bold text-slate-300';
+    nodeSpan.textContent = plat;
+    
+    const dataSpan = document.createElement('span');
+    dataSpan.className = 'text-slate-500 break-all';
+    dataSpan.textContent = '-> ' + dataStr;
+    
+    d.appendChild(timeSpan);
+    d.appendChild(tagSpan);
+    d.appendChild(nodeSpan);
+    d.appendChild(dataSpan);
+    
     svcLogContainer.appendChild(d);
   }
-  svcLogContainer.scrollTop=svcLogContainer.scrollHeight;
-  if(svcLogContainer.children.length>300)svcLogContainer.innerHTML='';
+  svcLogContainer.scrollTop = svcLogContainer.scrollHeight;
+  if (svcLogContainer.children.length > 500) {
+    while (svcLogContainer.children.length > 300) {
+      svcLogContainer.removeChild(svcLogContainer.firstChild);
+    }
+  }
 }
 
-let svcLogCache=[];
-async function fetchSvcLog(){
-  try{
-    const r=await fetch('/api/service-log?limit=50');
-    const entries=await r.json();
-    const newEntries=entries.slice(svcLogCache.length);
-    svcLogCache=entries;
-    renderSvcLog(newEntries);
-  }catch(e){}
-}
-
-const evtSource=new EventSource('/api/stream');
-evtSource.onmessage=function(e){
-  const data=JSON.parse(e.data);
-  for(const[name,nd]of Object.entries(data.nodes)){
-    const b=badgeEls[name];if(b){b.textContent=nd.status;b.className='px-2 py-0.5 text-xs rounded '+badgeClass(nd.status)}
-    for(const line of nd.new_logs)appendLine(logContainer,name,line);
+// Connect to real-time EventSource stream
+const evtSource = new EventSource('/api/stream');
+evtSource.onmessage = function(e) {
+  const data = JSON.parse(e.data);
+  
+  // 1. Process Node changes
+  for (const [name, nd] of Object.entries(data.nodes)) {
+    // Update Badge status and class
+    const b = badgeEls[name];
+    if (b) {
+      b.textContent = nd.status;
+      b.className = badgeClass(nd.status);
+    }
+    
+    // Update PIDs and Log Counts
+    if (pidEls[name]) {
+      pidEls[name].textContent = nd.pid || '-';
+    }
+    if (lcEls[name]) {
+      lcEls[name].textContent = nd.log_count || '0';
+    }
+    
+    // Update SVG Node styles dynamically
+    updateTopologyColors(name, nd.status);
+    
+    // Process new log output lines
+    for (const line of nd.new_logs) {
+      appendLine(logContainer, name, line);
+    }
   }
-  for(const evt of data.events){
-    appendLine(eventContainer,evt.source,evt.message,typeColors[evt.type]||'');
-    if(evt.type==='heartbeat_ack'&&(evt.source==='pi2'||evt.source==='pi4'))flashHB(evt.source);
+  
+  // 2. Process System Events
+  for (const evt of data.events) {
+    appendLine(eventContainer, evt.source, evt.message, typeColors[evt.type] || '');
+    if (evt.type === 'heartbeat_ack' && (evt.source === 'pi2' || evt.source === 'pi4')) {
+      flashHB(evt.source);
+    }
   }
-  if(data.telemetry){for(const[name,t]of Object.entries(data.telemetry))renderTelem(name,t)}
-  if(data.services){
-    for(const[name,s]of Object.entries(data.services))renderSvc(name,s);
+  
+  // 3. Process Service Logs
+  if (data.service_logs && data.service_logs.length > 0) {
+    renderSvcLog(data.service_logs);
+  }
+  
+  // 4. Update Node Telemetry text
+  if (data.telemetry) {
+    for (const [name, t] of Object.entries(data.telemetry)) {
+      renderTelem(name, t);
+    }
+  }
+  
+  // 5. Update Active Services
+  if (data.services) {
+    for (const [name, s] of Object.entries(data.services)) {
+      renderSvc(name, s);
+    }
     renderServiceDetail(data.services);
   }
-  if(data.compiles)renderCompiles(data.compiles);
+  
+  // 6. Update Compiler Status
+  if (data.compiles) {
+    renderCompiles(data.compiles);
+  }
 };
-evtSource.onerror=function(){appendLine(logContainer,'dashboard','Stream disconnected, retrying...','text-red-400')};
 
-document.getElementById('btn-start').onclick=function(){fetch('/api/start',{method:'POST'})};
-document.getElementById('btn-stop').onclick=function(){fetch('/api/stop',{method:'POST'})};
-document.getElementById('btn-clear-logs').onclick=function(){logContainer.innerHTML=''};
-document.getElementById('btn-clear-events').onclick=function(){eventContainer.innerHTML=''};
-
-async function pollStatus(){
-  try{
-    const r=await fetch('/api/status');
-    const data=await r.json();
-    for(const[name,nd]of Object.entries({relay:data.relay,pi2:data.pi2,pi4:data.pi4})){
-      const b=badgeEls[name];if(b){b.textContent=nd.status;b.className='px-2 py-0.5 text-xs rounded '+badgeClass(nd.status)}
-      if(pidEls[name])pidEls[name].textContent=nd.pid||'-';
-      if(lcEls[name])lcEls[name].textContent=nd.log_count||'0';
+evtSource.onerror = function() {
+  appendLine(logContainer, 'dashboard', 'Real-time stream disconnected, attempting reconnection...', 'text-rose-400 font-semibold');
+  // Set all indicator states to warning/stopped on loss of connection
+  for (const name of ['pi2', 'pi4']) {
+    const ind = indicators[name];
+    if (ind) {
+      ind.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
     }
-    if(data.telemetry){for(const[name,t]of Object.entries(data.telemetry))renderTelem(name,t)}
-    if(data.services){
-      for(const[name,s]of Object.entries(data.services))renderSvc(name,s);
+  }
+};
+
+document.getElementById('btn-start').onclick = function() {
+  fetch('/api/start', { method: 'POST' });
+};
+document.getElementById('btn-stop').onclick = function() {
+  fetch('/api/stop', { method: 'POST' });
+};
+document.getElementById('btn-clear-logs').onclick = function() {
+  logContainer.innerHTML = '';
+};
+document.getElementById('btn-clear-events').onclick = function() {
+  eventContainer.innerHTML = '';
+};
+
+const termModal = document.getElementById('terminal-modal');
+const btnTerminal = document.getElementById('btn-terminal');
+const btnCloseTerminal = document.getElementById('btn-close-terminal');
+
+btnTerminal.onclick = function() {
+  termModal.classList.remove('hidden');
+  termModal.classList.add('flex');
+  termScreen.focus();
+};
+
+btnCloseTerminal.onclick = function() {
+  termModal.classList.remove('flex');
+  termModal.classList.add('hidden');
+};
+
+termModal.onclick = function(e) {
+  if (e.target === termModal) {
+    termModal.classList.remove('flex');
+    termModal.classList.add('hidden');
+  }
+};
+
+// Initial state fetch to populate UI elements instantly on load
+async function fetchInitialStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const data = await r.json();
+    for (const [name, nd] of Object.entries({ relay: data.relay, pi2: data.pi2, pi4: data.pi4 })) {
+      const b = badgeEls[name];
+      if (b) {
+        b.textContent = nd.status;
+        b.className = badgeClass(nd.status);
+      }
+      if (pidEls[name]) pidEls[name].textContent = nd.pid || '-';
+      if (lcEls[name]) lcEls[name].textContent = nd.log_count || '0';
+      updateTopologyColors(name, nd.status);
+    }
+    if (data.telemetry) {
+      for (const [name, t] of Object.entries(data.telemetry)) {
+        renderTelem(name, t);
+      }
+    }
+    if (data.services) {
+      for (const [name, s] of Object.entries(data.services)) {
+        renderSvc(name, s);
+      }
       renderServiceDetail(data.services);
     }
-    if(data.compiles)renderCompiles(data.compiles);
-  }catch(e){}
+    if (data.compiles) {
+      renderCompiles(data.compiles);
+    }
+  } catch (e) {}
 }
-setInterval(pollStatus,3000);
-setInterval(fetchSvcLog,5000);
-pollStatus();
-fetchSvcLog();
+
+async function fetchInitialSvcLog() {
+  try {
+    const r = await fetch('/api/service-log?limit=50');
+    const entries = await r.json();
+    renderSvcLog(entries);
+  } catch (e) {}
+}
+
+const termScreen = document.getElementById('terminal-screen');
+const termModeBadge = document.getElementById('term-mode-badge');
+let termWs = null;
+let termMode = "sage"; // "sage" or "interactive"
+let currentInput = "";
+let commandHistory = [];
+let historyIdx = -1;
+
+function writeToTerminal(text) {
+  if (text.includes('\033[2J') || text.includes('\033[H')) {
+    termScreen.innerHTML = '';
+    text = text.replace(/\033\[2J/g, '').replace(/\033\[H/g, '');
+  }
+  
+  const formatted = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  
+  const span = document.createElement('span');
+  span.textContent = formatted;
+  termScreen.appendChild(span);
+  termScreen.scrollTop = termScreen.scrollHeight;
+}
+
+function connectTerminal() {
+  const loc = window.location;
+  const protocol = loc.protocol === "https:" ? "wss:" : "ws:";
+  termWs = new WebSocket(`${protocol}//${loc.host}/ws/terminal`);
+  
+  termWs.onmessage = function(e) {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "output") {
+      writeToTerminal(msg.content);
+    } else if (msg.type === "mode") {
+      termMode = msg.content;
+      termModeBadge.textContent = termMode === "sage" ? "SageShell" : "Remote Shell";
+      if (termMode === "sage") {
+        termModeBadge.className = "px-2 py-0.5 text-[9px] rounded font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400";
+      } else {
+        termModeBadge.className = "px-2 py-0.5 text-[9px] rounded font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 animate-pulse";
+      }
+      currentInput = "";
+    }
+  };
+  
+  termWs.onclose = function() {
+    writeToTerminal("\r\n[Console connection closed. Retrying in 3s...]\r\n");
+    setTimeout(connectTerminal, 3000);
+  };
+}
+
+termScreen.addEventListener('keydown', function(e) {
+  if (termMode === "interactive") {
+    e.preventDefault();
+    
+    let keyData = e.key;
+    if (e.key === "Enter") keyData = "\r";
+    else if (e.key === "Backspace") keyData = "\x7f";
+    else if (e.key === "Tab") keyData = "\t";
+    else if (e.key === "Escape") keyData = "\x1b";
+    else if (e.key === "ArrowUp") keyData = "\x1b[A";
+    else if (e.key === "ArrowDown") keyData = "\x1b[B";
+    else if (e.key === "ArrowRight") keyData = "\x1b[C";
+    else if (e.key === "ArrowLeft") keyData = "\x1b[D";
+    else if (e.ctrlKey && e.key === "c") keyData = "\x03"; // Handle Ctrl+C interrupt
+    else if (e.key.length > 1) return;
+    
+    if (termWs && termWs.readyState === WebSocket.OPEN) {
+      termWs.send(JSON.stringify({ type: "key", content: keyData }));
+    }
+  } else {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      writeToTerminal("\r\n");
+      const cmd = currentInput;
+      currentInput = "";
+      if (cmd.trim().length > 0) {
+        commandHistory.push(cmd);
+        historyIdx = commandHistory.length;
+      }
+      if (termWs && termWs.readyState === WebSocket.OPEN) {
+        termWs.send(JSON.stringify({ type: "command", content: cmd }));
+      }
+    } else if (e.key === "Backspace") {
+      e.preventDefault();
+      if (currentInput.length > 0) {
+        currentInput = currentInput.slice(0, -1);
+        termScreen.removeChild(termScreen.lastChild);
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (commandHistory.length > 0 && historyIdx > 0) {
+        for (let i = 0; i < currentInput.length; i++) {
+          termScreen.removeChild(termScreen.lastChild);
+        }
+        historyIdx--;
+        currentInput = commandHistory[historyIdx];
+        writeToTerminal(currentInput);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (commandHistory.length > 0 && historyIdx < commandHistory.length - 1) {
+        for (let i = 0; i < currentInput.length; i++) {
+          termScreen.removeChild(termScreen.lastChild);
+        }
+        historyIdx++;
+        currentInput = commandHistory[historyIdx];
+        writeToTerminal(currentInput);
+      } else if (historyIdx === commandHistory.length - 1) {
+        for (let i = 0; i < currentInput.length; i++) {
+          termScreen.removeChild(termScreen.lastChild);
+        }
+        historyIdx = commandHistory.length;
+        currentInput = "";
+      }
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      currentInput += e.key;
+      writeToTerminal(e.key);
+    }
+  }
+});
+
+// Start terminal connection
+connectTerminal();
+
+// Initial populate runs once on boot.
+// All subsequent updates are streamed immediately in real-time over EventSource!
+fetchInitialStatus();
+fetchInitialSvcLog();
 </script>
 </body>
 </html>

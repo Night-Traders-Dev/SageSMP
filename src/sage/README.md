@@ -298,6 +298,44 @@ Create `.smp_config` to customize build settings:
 }
 ```
 
+## Dashboard & Cluster Control Center
+
+A modern, glassmorphic real-time dashboard is available to monitor and manage the SageSMP cluster (OrangePi relay + RPi2 + RPi4 clients).
+
+### Running the Dashboard
+
+1. **Install Python dependencies** (inside a virtual environment):
+   ```bash
+   cd dashboard
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install fastapi uvicorn jinja2
+   ```
+2. **Start the server**:
+   ```bash
+   python3 app.py
+   ```
+3. Open `http://<orangepi-ip>:8081` in your browser.
+
+### Key Features
+
+* **Real-Time SSE Telemetry**: Process status, PIDs, active logs, client CPU/GPU temperatures, memory load, and telemetry updates are pushed instantly via Server-Sent Events (SSE). No background polling is required.
+* **Formatted Live Console & Events**: Process logs and cluster events are dynamically formatted with distinct emojis and tag highlights in the UI (e.g. 🟢 `HEARTBEAT`, ✅ `HEARTBEAT OK`, ⚙️ `SERVICES`, 🛠️ `COMPILE`).
+* **Overlay Terminal Console**: Access an interactive command console by clicking the terminal icon in the header.
+
+### Terminal Commands
+
+* `help` - Show available console tools.
+* `status` - Tabulate status (Running, Stopped, PID, Log Count) of all cluster nodes.
+* `info <device>` - Execute system telemetry queries (`uptime`, `free -h`, `df -h /`, `uname -a`) on OrangePi, pi2, or pi4.
+* `start <device>` / `stop <device>` - Spin up or shut down specific nodes or all nodes (`all`).
+* `clear` - Clear console output.
+* `sc <device>` (Sage Connect) - Connect directly to the terminal shell of a device (local or SSH) with a fully interactive shell:
+  * `sc OrangePi` - Local OrangePi `/bin/bash` shell.
+  * `sc pi2` - Remote `ssh pi2` shell.
+  * `sc pi4` - Remote `ssh pi4` shell.
+  * Type `exit` to return to the `sage> ` prompt.
+
 ## License
 
 MIT
