@@ -57,3 +57,20 @@ orangepi@orangepi:~$
   * `sc pi4` $\rightarrow$ Spawns `ssh pi4` via the OrangePi.
 * **PTY Spawning**: The backend allocates a pseudo-terminal (`pty.openpty()`) and runs the target shell as a session leader, binding child stdin/stdout to the WebSocket. This enables running interactive commands (e.g., `htop`, text editors, or SSH credentials prompts).
 * **Lifecycle**: Typing `exit` kills the shell subprocess, closes the PTY master file descriptor, and returns control to the `sage> ` prompt.
+
+---
+
+## 4. SageLang Nightly Build Scheduler
+
+The dashboard manages the automated nightly cross-compilation of the core `SageLang` language.
+
+* **Timing**: Runs twice daily:
+  * **Midnight** (00:00 local time)
+  * **Noon** (12:00 local time)
+* **Execution**: The OrangePi server connects via SSH to the RPi4 build node and executes:
+  ```bash
+  ssh -o BatchMode=yes pi4 '/home/ubuntu/nightly_build.sh'
+  ```
+  It captures the stdout and stderr streams dynamically, registering the results (duration, start/end timestamps, exit code, and complete build log) in the cross-compilation records.
+* **Manual Force**: You can manually trigger the nightly build execution at any time by clicking the **Run Nightly Build** button inside the *Cross-Compile History* card on the web interface. This triggers a `POST` request to `/api/nightly-build`, running the compiler in an asynchronous background worker task.
+
