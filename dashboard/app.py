@@ -96,9 +96,9 @@ def save_mailboxes():
         pass
 
 state = {
-    "relay": {"name": "OrangePi Relay", "proc": None, "logs": [], "status": "stopped", "started_at": None},
-    "pi2": {"name": "RPi2 Client", "proc": None, "logs": [], "status": "stopped", "started_at": None},
-    "pi4": {"name": "RPi4 Client", "proc": None, "logs": [], "status": "stopped", "started_at": None},
+    "relay": {"name": "OrangePi Relay", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
+    "pi2": {"name": "RPi2 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
+    "pi4": {"name": "RPi4 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
     "events": [],
     "telemetry": {"pi2": {}, "pi4": {}},
     "services": {"pi2": {}, "pi4": {}},
@@ -234,6 +234,26 @@ async def start_node(node_name, cmd, cwd=None, env=None):
         add_event("system", "dashboard", f"{n['name']} started")
         asyncio.create_task(stream_reader(n["proc"].stdout, node_name))
         asyncio.create_task(stream_reader(n["proc"].stderr, node_name))
+        
+        # Start Pi-hole log tailing on RPi2
+        if node_name == "pi2":
+            try:
+                n["tail_proc"] = await asyncio.create_subprocess_exec(
+                    "ssh", "-o", "BatchMode=yes", "pi2", "sudo tail -f -n 0 /var/log/pihole/pihole.log",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                )
+                async def tail_reader(stream):
+                    while True:
+                        line = await stream.readline()
+                        if not line:
+                            break
+                        line_str = line.decode(errors="replace").rstrip()
+                        if line_str:
+                            add_log("pi2", f"[Pi-hole] {line_str}")
+                asyncio.create_task(tail_reader(n["tail_proc"].stdout))
+            except Exception as te:
+                add_event("error", "dashboard", f"Failed to start Pi-hole log tail: {te}")
+                
         asyncio.create_task(wait_for_exit(node_name))
     except Exception as e:
         add_event("error", "dashboard", f"Failed to start {n['name']}: {e}")
@@ -245,10 +265,27 @@ async def wait_for_exit(node_name):
     except Exception:
         pass
     n["status"] = "stopped"
+    if n["tail_proc"]:
+        try:
+            n["tail_proc"].terminate()
+        except Exception:
+            pass
+        n["tail_proc"] = None
     add_event("system", "dashboard", f"{n['name']} exited (code {n['proc'].returncode})")
 
 async def stop_node(node_name):
     n = state[node_name]
+    if n["tail_proc"]:
+        try:
+            n["tail_proc"].terminate()
+            await asyncio.wait_for(n["tail_proc"].wait(), timeout=3)
+        except Exception:
+            try:
+                n["tail_proc"].kill()
+            except Exception:
+                pass
+        n["tail_proc"] = None
+        
     if not n["proc"] or n["proc"].returncode is not None:
         n["status"] = "stopped"
         return
