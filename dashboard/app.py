@@ -459,6 +459,32 @@ async def trigger_nightly_build():
     asyncio.create_task(run_nightly_build(triggered_by="manual"))
     return {"status": "triggered"}
 
+@app.post("/api/service-log/clear")
+async def clear_service_log():
+    state["service_logs"] = []
+    try:
+        entries = load_service_log()
+        compile_entries = [e for e in entries if e.get("type") == "COMPILE"]
+        with open(SERVICE_LOG_FILE, "w") as f:
+            for e in compile_entries:
+                f.write(json.dumps(e) + "\n")
+    except Exception as e:
+        add_event("error", "dashboard", f"Failed to clear service log: {e}")
+    return {"status": "ok"}
+
+@app.post("/api/compiles/clear")
+async def clear_compiles():
+    state["compiles"] = []
+    try:
+        entries = load_service_log()
+        non_compile_entries = [e for e in entries if e.get("type") != "COMPILE"]
+        with open(SERVICE_LOG_FILE, "w") as f:
+            for e in non_compile_entries:
+                f.write(json.dumps(e) + "\n")
+    except Exception as e:
+        add_event("error", "dashboard", f"Failed to clear compiles: {e}")
+    return {"status": "ok"}
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(schedule_nightly_builds())
