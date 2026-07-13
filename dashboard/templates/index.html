@@ -164,9 +164,9 @@
         <div class="flex justify-between"><span>IP Address:</span><span class="text-indigo-400">192.168.254.44</span></div>
         <div class="flex justify-between"><span>Architecture:</span><span class="text-slate-300">riscv64</span></div>
         <div class="flex justify-between"><span>CPU:</span><span class="text-slate-300">RISC-V Ky X1 Octa-Core</span></div>
-        <div class="flex justify-between"><span>CPU Speed:</span><span class="text-slate-300">Ky X1 @ 1.8 GHz</span></div>
+        <div class="flex justify-between"><span>CPU Speed:</span><span id="spec-speed-relay" class="text-slate-300">Ky X1 @ 1.8 GHz</span></div>
         <div class="flex justify-between"><span>Cores:</span><span class="text-slate-300">8 Cores</span></div>
-        <div class="flex justify-between"><span>Total RAM:</span><span class="text-slate-300">2 GB LPDDR3</span></div>
+        <div class="flex justify-between"><span>Total RAM:</span><span id="spec-ram-relay" class="text-slate-300">2 GB LPDDR3</span></div>
         <div class="flex justify-between"><span>GPU:</span><span class="text-slate-300">Imagination BXE-2-32</span></div>
         <div class="flex justify-between"><span>OS:</span><span class="text-slate-300">Debian GNU/Linux 12</span></div>
         <div class="flex justify-between"><span>Relay Port:</span><span class="text-indigo-400">42000</span></div>
@@ -192,9 +192,9 @@
         <div class="flex justify-between"><span>IP Address:</span><span class="text-indigo-400">10.42.1.109</span></div>
         <div class="flex justify-between"><span>Architecture:</span><span class="text-slate-300">armv7l (armhf)</span></div>
         <div class="flex justify-between"><span>CPU:</span><span class="text-slate-300">Broadcom BCM2836 Quad</span></div>
-        <div class="flex justify-between"><span>CPU Speed:</span><span class="text-slate-300">Cortex-A7 @ 900 MHz</span></div>
+        <div class="flex justify-between"><span>CPU Speed:</span><span id="spec-speed-pi2" class="text-slate-300">Cortex-A7 @ 900 MHz</span></div>
         <div class="flex justify-between"><span>Cores:</span><span class="text-slate-300">4 Cores</span></div>
-        <div class="flex justify-between"><span>Total RAM:</span><span class="text-slate-300">1 GB LPDDR2</span></div>
+        <div class="flex justify-between"><span>Total RAM:</span><span id="spec-ram-pi2" class="text-slate-300">1 GB LPDDR2</span></div>
         <div class="flex justify-between"><span>GPU:</span><span class="text-slate-300">VideoCore IV</span></div>
         <div class="flex justify-between"><span>OS:</span><span class="text-slate-300">Raspbian GNU/Linux 11</span></div>
         <div class="flex justify-between"><span>Role:</span><span class="text-slate-300">DNS & telemetry</span></div>
@@ -220,9 +220,9 @@
         <div class="flex justify-between"><span>IP Address:</span><span class="text-indigo-400">10.42.0.141</span></div>
         <div class="flex justify-between"><span>Architecture:</span><span class="text-slate-300">aarch64 (ARMv8-A)</span></div>
         <div class="flex justify-between"><span>CPU:</span><span class="text-slate-300">Broadcom BCM2711 Quad</span></div>
-        <div class="flex justify-between"><span>CPU Speed:</span><span class="text-slate-300">Cortex-A72 @ 1.5 GHz</span></div>
+        <div class="flex justify-between"><span>CPU Speed:</span><span id="spec-speed-pi4" class="text-slate-300">Cortex-A72 @ 1.5 GHz</span></div>
         <div class="flex justify-between"><span>Cores:</span><span class="text-slate-300">4 Cores</span></div>
-        <div class="flex justify-between"><span>Total RAM:</span><span class="text-slate-300">4 GB LPDDR4</span></div>
+        <div class="flex justify-between"><span>Total RAM:</span><span id="spec-ram-pi4" class="text-slate-300">4 GB LPDDR4</span></div>
         <div class="flex justify-between"><span>GPU:</span><span class="text-slate-300">VideoCore VI</span></div>
         <div class="flex justify-between"><span>OS:</span><span class="text-slate-300">Ubuntu 22.04 LTS</span></div>
         <div class="flex justify-between"><span>Role:</span><span class="text-slate-300">Metrics collection</span></div>
@@ -620,6 +620,26 @@ function flashHB(name) {
 function renderTelem(name, data) {
   const el = document.getElementById('telem-' + name);
   if (!el) return;
+  
+  if (data) {
+    if (data.cpu_mhz !== undefined) {
+      const speedSpan = document.getElementById('spec-speed-' + name);
+      if (speedSpan) {
+        const mhz = parseFloat(data.cpu_mhz);
+        if (mhz >= 1000) {
+          speedSpan.textContent = (mhz / 1000).toFixed(2) + ' GHz';
+        } else {
+          speedSpan.textContent = mhz.toFixed(0) + ' MHz';
+        }
+      }
+    }
+    if (data.ram_total !== undefined) {
+      const ramSpan = document.getElementById('spec-ram-' + name);
+      if (ramSpan) {
+        ramSpan.textContent = data.ram_total;
+      }
+    }
+  }
   
   if (name === 'relay') {
     el.textContent = data && data.node_count !== undefined ? 'Connected Nodes: ' + data.node_count : 'Connected Nodes: 0';

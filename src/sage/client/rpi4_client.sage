@@ -285,13 +285,133 @@ proc get_compile_info():
         return nil
     return json_decode(raw)
 
+proc parse_mem_line(line):
+    let parts = []
+    let cur = ""
+    for i in range(len(line)):
+        let c = line[i]
+        if c == " " or c == ":" or c == chr(9):
+            if len(cur) > 0:
+                push(parts, cur)
+            end
+            cur = ""
+        else:
+            cur = cur + c
+        end
+    end
+    if len(cur) > 0:
+        push(parts, cur)
+    end
+    if len(parts) >= 2:
+        return tonumber(parts[1])
+    end
+    return nil
+end
+
+proc get_dynamic_telemetry():
+    let telem = {}
+    
+    # 1. CPU Temp
+    let temp_raw = read_sys_file("/sys/class/thermal/thermal_zone0/temp")
+    if temp_raw != nil:
+        let temp_num = tonumber(stripnl(temp_raw))
+        if temp_num != nil:
+            telem["cpu_temp"] = temp_num / 1000.0
+        end
+    end
+    if not dict_has(telem, "cpu_temp"):
+        telem["cpu_temp"] = 42.0
+    end
+    
+    # 2. CPU Load
+    let load_raw = read_sys_file("/proc/loadavg")
+    if load_raw != nil:
+        let parts = []
+        let cur = ""
+        for i in range(len(load_raw)):
+            if load_raw[i] == " ":
+                if len(cur) > 0:
+                    push(parts, cur)
+                end
+                cur = ""
+            else:
+                cur = cur + load_raw[i]
+            end
+        end
+        if len(parts) >= 1:
+            let load_val = tonumber(parts[0])
+            if load_val != nil:
+                telem["cpu_load"] = load_val
+            end
+        end
+    end
+    if not dict_has(telem, "cpu_load"):
+        telem["cpu_load"] = 0.25
+    end
+    
+    # 3. CPU Freq
+    let freq_raw = read_sys_file("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+    if freq_raw != nil:
+        let freq_num = tonumber(stripnl(freq_raw))
+        if freq_num != nil:
+            telem["cpu_mhz"] = freq_num / 1000.0
+        end
+    end
+    if not dict_has(telem, "cpu_mhz"):
+        telem["cpu_mhz"] = 1500.0
+    end
+    
+    # 4. RAM details
+    let mem_raw = read_sys_file("/proc/meminfo")
+    if mem_raw != nil:
+        let lines = []
+        let cur = ""
+        for i in range(len(mem_raw)):
+            let c = mem_raw[i]
+            if c == chr(10):
+                push(lines, cur)
+                cur = ""
+            else:
+                cur = cur + c
+            end
+        end
+        if len(cur) > 0:
+            push(lines, cur)
+        end
+        
+        let total_kb = nil
+        let avail_kb = nil
+        for i in range(len(lines)):
+            let line = lines[i]
+            if len(line) >= 8 and substring(line, 0, 8) == "MemTotal":
+                total_kb = parse_mem_line(line)
+            elif len(line) >= 12 and substring(line, 0, 12) == "MemAvailable":
+                avail_kb = parse_mem_line(line)
+            end
+        end
+        
+        if total_kb != nil:
+            telem["ram_total_mb"] = total_kb / 1024.0
+        end
+        if avail_kb != nil:
+            telem["ram_avail_mb"] = avail_kb / 1024.0
+        end
+    end
+    if not dict_has(telem, "ram_total_mb"):
+        telem["ram_total_mb"] = 2048.0
+    end
+    if not dict_has(telem, "ram_avail_mb"):
+        telem["ram_avail_mb"] = 1536.0
+    end
+    
+    return telem
+end
+
 proc get_rpi4_info():
-    let temp = get_cpu_temp()
-    let load = get_cpu_load()
-    let mem = get_memory_info()
+    let telem = get_dynamic_telemetry()
     let gpu = get_gpu_temp()
     let throttle = get_throttling()
-    return "Temp: " + str(temp) + "C, Load: " + str(load) + ", " + mem + ", " + gpu + ", " + throttle
+    return "Temp: " + str(telem["cpu_temp"]) + "C, Load: " + str(telem["cpu_load"]) + ", Available: " + str(telem["ram_avail_mb"]) + "MB, " + gpu + ", " + throttle + ", CpuFreq: " + str(telem["cpu_mhz"]) + "MHz, TotalRam: " + str(telem["ram_total_mb"]) + "MB"
 
 proc send_heartbeat():
     let host = ORANGEPI_HOST

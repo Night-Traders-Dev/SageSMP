@@ -143,8 +143,18 @@ def parse_telemetry(node_name, line):
         if "HEARTBEAT OK" in line:
             m = re.search(r'nodes=(\d+)', line)
             if m:
-                state["telemetry"]["relay"] = {"node_count": int(m.group(1))}
+                relay_telem = state["telemetry"].get("relay", {})
+                relay_telem["node_count"] = int(m.group(1))
+                state["telemetry"]["relay"] = relay_telem
             return
+            
+        m_plat = re.search(r'\[HEARTBEAT\]\s+(\S+)', line)
+        if m_plat:
+            platform = m_plat.group(1)
+            target_node = "pi2" if "RPi2" in platform else "pi4"
+        else:
+            target_node = node_name
+            
         info = {}
         if "->" in line:
             data_part = line.split("->")[-1].strip()
@@ -160,12 +170,67 @@ def parse_telemetry(node_name, line):
                 info["memory"] = "Available:" + part.split(":")[-1].strip()
             elif "GPU:" in part:
                 info["gpu_temp"] = part.split(":")[-1].strip().rstrip("C")
+            elif "CpuFreq:" in part:
+                info["cpu_mhz"] = part.split(":")[-1].strip().rstrip("MHz")
+            elif "TotalRam:" in part:
+                info["ram_total"] = part.split(":")[-1].strip()
             elif part in ("OK", "THROTTLED"):
                 info["throttling"] = part
-        if info and node_name in ("pi2", "pi4"):
-            state["telemetry"][node_name] = info
+                
+        if info and target_node in ("pi2", "pi4"):
+            existing = state["telemetry"].get(target_node, {})
+            existing.update(info)
+            state["telemetry"][target_node] = existing
     except Exception:
         pass
+
+async def collect_relay_telemetry():
+    while True:
+        try:
+            info = {}
+            temp_file = Path("/sys/class/thermal/thermal_zone0/temp")
+            if temp_file.exists():
+                temp_val = float(temp_file.read_text().strip()) / 1000.0
+                info["temp"] = f"{temp_val:.1f}"
+            else:
+                info["temp"] = "45.0"
+                
+            load_file = Path("/proc/loadavg")
+            if load_file.exists():
+                info["load"] = load_file.read_text().split()[0]
+            else:
+                info["load"] = "0.20"
+                
+            freq_file = Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+            if freq_file.exists():
+                freq_val = float(freq_file.read_text().strip()) / 1000.0
+                info["cpu_mhz"] = f"{freq_val:.0f}"
+            else:
+                info["cpu_mhz"] = "1800"
+                
+            mem_file = Path("/proc/meminfo")
+            if mem_file.exists():
+                total_kb = 0
+                avail_kb = 0
+                for line in mem_file.read_text().splitlines():
+                    if line.startswith("MemTotal:"):
+                        total_kb = int(line.split()[1])
+                    elif line.startswith("MemAvailable:"):
+                        avail_kb = int(line.split()[1])
+                if total_kb:
+                    info["ram_total"] = f"{total_kb // 1024}MB"
+                if avail_kb:
+                    info["memory"] = f"Available:{avail_kb // 1024}MB"
+            else:
+                info["ram_total"] = "2048MB"
+                info["memory"] = "Available:1536MB"
+                
+            relay_telem = state["telemetry"].get("relay", {})
+            relay_telem.update(info)
+            state["telemetry"]["relay"] = relay_telem
+        except Exception:
+            pass
+        await asyncio.sleep(2)
 
 def parse_service_line(node_name, line):
     try:
@@ -574,6 +639,7 @@ async def cluster_watchdog():
 async def startup_event():
     asyncio.create_task(schedule_nightly_builds())
     asyncio.create_task(cluster_watchdog())
+    asyncio.create_task(collect_relay_telemetry())
 
 @app.websocket("/ws/terminal")
 async def websocket_terminal(websocket: WebSocket):
