@@ -96,9 +96,9 @@ def save_mailboxes():
         pass
 
 state = {
-    "relay": {"name": "OrangePi Relay", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
-    "pi2": {"name": "RPi2 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
-    "pi4": {"name": "RPi4 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "started_at": None},
+    "relay": {"name": "OrangePi Relay", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
+    "pi2": {"name": "RPi2 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
+    "pi4": {"name": "RPi4 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
     "events": [],
     "telemetry": {"pi2": {}, "pi4": {}},
     "services": {"pi2": {}, "pi4": {}},
@@ -224,8 +224,10 @@ async def stream_reader(stream, node_name):
 async def start_node(node_name, cmd, cwd=None, env=None):
     n = state[node_name]
     if n["proc"] and n["proc"].returncode is None:
+        n["desired_status"] = "running"
         return
     try:
+        n["desired_status"] = "running"
         n["proc"] = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd, env=env
         )
@@ -275,6 +277,7 @@ async def wait_for_exit(node_name):
 
 async def stop_node(node_name):
     n = state[node_name]
+    n["desired_status"] = "stopped"
     if n["tail_proc"]:
         try:
             n["tail_proc"].terminate()
@@ -542,9 +545,34 @@ async def clear_compiles():
         add_event("error", "dashboard", f"Failed to clear compiles: {e}")
     return {"status": "ok"}
 
+async def cluster_watchdog():
+    # Allow 5 seconds initial grace period for manual operations or clean server boot
+    await asyncio.sleep(5)
+    while True:
+        for name in ["relay", "pi2", "pi4"]:
+            n = state[name]
+            if n["desired_status"] == "running":
+                is_running = n["proc"] and n["proc"].returncode is None
+                if not is_running:
+                    add_event("warning", "dashboard", f"Watchdog: {n['name']} stopped. Auto-restarting...")
+                    try:
+                        if name == "relay":
+                            sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
+                            env = os.environ.copy()
+                            env["SMP_PORT"] = str(SMP_PORT)
+                            await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
+                        elif name == "pi2":
+                            await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+                        elif name == "pi4":
+                            await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+                    except Exception as re:
+                        add_event("error", "dashboard", f"Watchdog failed to restart {n['name']}: {re}")
+        await asyncio.sleep(10)
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(schedule_nightly_builds())
+    asyncio.create_task(cluster_watchdog())
 
 @app.websocket("/ws/terminal")
 async def websocket_terminal(websocket: WebSocket):
