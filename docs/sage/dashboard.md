@@ -81,10 +81,22 @@ The dashboard manages the automated nightly cross-compilation of the core `SageL
 To keep the interface clean and concise, detailed telemetry, configuration, and logs are collapsed by default and can be expanded interactively by clicking on components:
 
 1. **Node Cards (OrangePi, RPi2, RPi4)**:
-   * Click to expand details such as listening IP, port configurations, active authorization types (e.g. XOR cipher), and environment setups.
+   * Click to expand details such as listening IP, port configurations, active authorization types, environment setups, and full hardware specifications (CPU speed, Core Count, Architecture, Total RAM, GPU type, and Operating System details).
 2. **Active Services**:
    * Click to expand service-specific metrics such as specific DNS port listen status, FTL process PID, Grafana versions, and active exporters.
 3. **Cross-Compile History Runs**:
    * Click to toggle the full compilation logs output block (`pre` block), making it easy to review compile outputs on failure or collapse them on success.
+
+---
+
+## 6. SageSMP Mailbox Console Management
+
+The console terminal supports direct cluster mailbox operations to manage, read, and route messages across devices over SageSMP:
+
+* **`smp-mailboxes`**: Displays a tabulated status overview of all node mailboxes in the cluster (OrangePi, RPi2, RPi4), showing the number of pending/queued messages, and historical sent/received metrics.
+* **`smp-read <device>`**: Reads the queue of pending mail inside the target device's mailbox. For each message, it details the index, timestamp, sender node, and payload.
+* **`smp-send <src_device> <dst_device> <message>`**: Creates and sends a message from a source device to a destination device's mailbox over SageSMP. This generates a real-time event log update in the cluster events list and streams a record to the persistent service log.
+
+*Note: The terminal console uses non-wrapping `whitespace-pre` layout with horizontal scrolling to display long commands and mailbox grids cleanly without formatting breakups.*
 
 

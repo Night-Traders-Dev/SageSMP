@@ -336,6 +336,9 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
   * `sc pi2` - Remote `ssh pi2` shell.
   * `sc pi4` - Remote `ssh pi4` shell.
   * Type `exit` to return to the `sage> ` prompt.
+* `smp-mailboxes` - List active SageSMP mailboxes, pending message counts, and delivery metrics.
+* `smp-read <device>` - Fetch and display all queued messages inside the target device's mailbox.
+* `smp-send <src_device> <dst_device> <message>` - Compose and dispatch a message from a source device to a destination device's mailbox across SageSMP.
 
 ## License
 
