@@ -1063,6 +1063,7 @@ function writeToTerminal(text) {
   const formatted = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   
   const span = document.createElement('span');
+  span.style.whiteSpace = 'pre';
   span.textContent = formatted;
   termScreen.appendChild(span);
   termScreen.scrollTop = termScreen.scrollHeight;
