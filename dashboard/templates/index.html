@@ -199,7 +199,12 @@
     </div>
     <!-- Build status -->
     <div class="glass-panel rounded-xl p-4 shadow-xl">
-      <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-3 border-b border-slate-850 pb-2">Cross-Compile History</h2>
+      <div class="flex justify-between items-center mb-3 border-b border-slate-850 pb-2">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-300">Cross-Compile History</h2>
+        <button id="btn-nightly-build" class="text-[10px] px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 border border-indigo-500/30 text-white rounded transition font-medium uppercase tracking-wider shadow-sm">
+          Run Nightly Build
+        </button>
+      </div>
       <div id="compile-detail" class="text-xs text-slate-300 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
         <div class="text-slate-500 italic">Waiting for compile results...</div>
       </div>
@@ -812,6 +817,23 @@ document.getElementById('btn-clear-logs').onclick = function() {
 };
 document.getElementById('btn-clear-events').onclick = function() {
   eventContainer.innerHTML = '';
+};
+
+document.getElementById('btn-nightly-build').onclick = function() {
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Triggered...';
+  btn.className = 'text-[10px] px-2.5 py-1 bg-slate-800 border border-slate-700 text-slate-500 rounded transition font-medium uppercase tracking-wider cursor-not-allowed';
+  
+  fetch('/api/nightly-build', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = 'Run Nightly Build';
+        btn.className = 'text-[10px] px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 border border-indigo-500/30 text-white rounded transition font-medium uppercase tracking-wider shadow-sm';
+      }, 3000);
+    });
 };
 
 const termModal = document.getElementById('terminal-modal');

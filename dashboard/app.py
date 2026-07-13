@@ -362,6 +362,107 @@ async def stream(request: Request):
             pass
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+# Nightly build task locking
+active_build_lock = asyncio.Lock()
+
+async def run_nightly_build(triggered_by="schedule"):
+    if active_build_lock.locked():
+        add_event("compile", "pi4", "Nightly build already in progress. Ignored.")
+        return
+        
+    async with active_build_lock:
+        start_time = datetime.utcnow().isoformat() + "Z"
+        ts = datetime.now()
+        add_event("compile", "pi4", f"Nightly build started ({triggered_by})")
+        
+        cmd = "ssh -o BatchMode=yes pi4 '/home/ubuntu/nightly_build.sh'"
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT
+        )
+        
+        output_lines = []
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                decoded = line.decode(errors="replace")
+                output_lines.append(decoded)
+        except Exception as e:
+            output_lines.append(f"\n[Error reading build stream: {str(e)}]\n")
+            
+        await proc.wait()
+        exit_code = proc.returncode
+        end_time = datetime.utcnow().isoformat() + "Z"
+        status = "ok" if exit_code == 0 else "error"
+        
+        duration = int((datetime.now() - ts).total_seconds())
+        
+        build_data = {
+            "status": status,
+            "end": end_time,
+            "exit_code": exit_code,
+            "output": "".join(output_lines),
+            "duration": duration,
+            "start": start_time,
+            "triggered_by": triggered_by
+        }
+        
+        state["compiles"].append({
+            "platform": "pi4",
+            "data": build_data,
+            "timestamp": ts.isoformat()
+        })
+        if len(state["compiles"]) > 50:
+            state["compiles"] = state["compiles"][-50:]
+            
+        # Write to service log in O(1) format
+        entry = {
+            "platform": "pi4",
+            "type": "COMPILE",
+            "timestamp": ts.isoformat(),
+            "data": build_data
+        }
+        append_service_log(entry)
+        
+        add_event("compile", "pi4", f"Nightly build finished with status: {status} (exit={exit_code})")
+
+async def schedule_nightly_builds():
+    while True:
+        now = datetime.now()
+        trigger_times = [
+            now.replace(hour=0, minute=0, second=0, microsecond=0),
+            now.replace(hour=12, minute=0, second=0, microsecond=0)
+        ]
+        
+        next_triggers = []
+        for t in trigger_times:
+            if t <= now:
+                import datetime as dt
+                t += dt.timedelta(days=1)
+            next_triggers.append(t)
+            
+        next_run = min(next_triggers)
+        delay = (next_run - now).total_seconds()
+        
+        try:
+            await asyncio.sleep(delay + 2.0)
+        except asyncio.CancelledError:
+            break
+            
+        asyncio.create_task(run_nightly_build(triggered_by="schedule"))
+
+@app.post("/api/nightly-build")
+async def trigger_nightly_build():
+    asyncio.create_task(run_nightly_build(triggered_by="manual"))
+    return {"status": "triggered"}
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(schedule_nightly_builds())
+
 @app.websocket("/ws/terminal")
 async def websocket_terminal(websocket: WebSocket):
     await websocket.accept()
