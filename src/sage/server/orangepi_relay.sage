@@ -214,6 +214,8 @@ proc handle_client(client_fd):
 
     let resp = "{\"status\":\"ok\",\"node_count\":" + str(count) + ",\"server_ts\":" + str(clock()) + "}"
     tcp.sendall(client_fd, resp)
+    # Shift TIME_WAIT to client by waiting for client to close the connection first
+    tcp.recv(client_fd, 1)
     tcp.close(client_fd)
 end
 
