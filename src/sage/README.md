@@ -322,6 +322,7 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
 * **Real-Time SSE Telemetry**: Process status, PIDs, active logs, client CPU/GPU temperatures, memory load, and telemetry updates are pushed instantly via Server-Sent Events (SSE). No background polling is required.
 * **Formatted Live Console & Events**: Process logs and cluster events are dynamically formatted with distinct emojis and tag highlights in the UI (e.g. 🟢 `HEARTBEAT`, ✅ `HEARTBEAT OK`, ⚙️ `SERVICES`, 🛠️ `COMPILE`).
 * **Overlay Terminal Console**: Access an interactive command console by clicking the terminal icon in the header.
+* **Interactive Expandable Components**: Click on any node performance card, active service item, or cross-compile run card to expand it and reveal granular system metrics, config files, and build logs.
 
 ### Terminal Commands
 

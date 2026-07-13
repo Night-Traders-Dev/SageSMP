@@ -149,7 +149,7 @@
   <!-- Node Performance Grid -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <!-- OrangePi Card -->
-    <div class="glass-panel rounded-xl p-4 border-l-4 border-emerald-500 shadow-lg hover:shadow-emerald-500/5 transition">
+    <div id="card-relay" class="glass-panel rounded-xl p-4 border-l-4 border-emerald-500 shadow-lg hover:shadow-emerald-500/5 transition cursor-pointer select-none">
       <div class="flex justify-between items-start">
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">OrangePi Relay</h2>
         <span id="badge-relay" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
@@ -159,9 +159,17 @@
         <span>PID: <span id="pid-relay" class="text-slate-200">-</span></span>
         <span>Logs: <span id="logcount-relay" class="text-slate-200">0</span></span>
       </div>
+      <!-- Detailed Info -->
+      <div id="details-relay" class="hidden mt-3 border-t border-slate-800/60 pt-3 text-[11px] text-slate-400 space-y-1.5 font-mono animate-fadeIn">
+        <div class="flex justify-between"><span>Relay Port:</span><span class="text-indigo-400">42000</span></div>
+        <div class="flex justify-between"><span>Max Clients:</span><span class="text-slate-300">64</span></div>
+        <div class="flex justify-between"><span>Auth Type:</span><span class="text-slate-300">XOR Cipher</span></div>
+        <div class="flex justify-between"><span>JIT Mode:</span><span class="text-emerald-400">Enabled</span></div>
+      </div>
+      <div class="text-[9px] text-slate-500 mt-2 text-right italic font-medium">Click to toggle details</div>
     </div>
     <!-- RPi2 Card -->
-    <div class="glass-panel rounded-xl p-4 border-l-4 border-blue-500 shadow-lg hover:shadow-blue-500/5 transition">
+    <div id="card-pi2" class="glass-panel rounded-xl p-4 border-l-4 border-blue-500 shadow-lg hover:shadow-blue-500/5 transition cursor-pointer select-none">
       <div class="flex justify-between items-start">
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">RPi2 (Pi-hole)</h2>
         <span id="badge-pi2" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
@@ -172,9 +180,17 @@
         <span>PID: <span id="pid-pi2" class="text-slate-200">-</span></span>
         <span>Logs: <span id="logcount-pi2" class="text-slate-200">0</span></span>
       </div>
+      <!-- Detailed Info -->
+      <div id="details-pi2" class="hidden mt-3 border-t border-slate-800/60 pt-3 text-[11px] text-slate-400 space-y-1.5 font-mono animate-fadeIn">
+        <div class="flex justify-between"><span>IP Address:</span><span class="text-indigo-400">10.42.1.109</span></div>
+        <div class="flex justify-between"><span>Role:</span><span class="text-slate-300">DNS & telemetry</span></div>
+        <div class="flex justify-between"><span>Target:</span><span class="text-slate-300">192.168.254.44:42000</span></div>
+        <div class="flex justify-between"><span>Interval:</span><span class="text-slate-300">60s</span></div>
+      </div>
+      <div class="text-[9px] text-slate-500 mt-2 text-right italic font-medium">Click to toggle details</div>
     </div>
     <!-- RPi4 Card -->
-    <div class="glass-panel rounded-xl p-4 border-l-4 border-violet-500 shadow-lg hover:shadow-violet-500/5 transition">
+    <div id="card-pi4" class="glass-panel rounded-xl p-4 border-l-4 border-violet-500 shadow-lg hover:shadow-violet-500/5 transition cursor-pointer select-none">
       <div class="flex justify-between items-start">
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">RPi4 (Graf+Prom)</h2>
         <span id="badge-pi4" class="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-slate-800 text-slate-400">stopped</span>
@@ -185,6 +201,14 @@
         <span>PID: <span id="pid-pi4" class="text-slate-200">-</span></span>
         <span>Logs: <span id="logcount-pi4" class="text-slate-200">0</span></span>
       </div>
+      <!-- Detailed Info -->
+      <div id="details-pi4" class="hidden mt-3 border-t border-slate-800/60 pt-3 text-[11px] text-slate-400 space-y-1.5 font-mono animate-fadeIn">
+        <div class="flex justify-between"><span>IP Address:</span><span class="text-indigo-400">10.42.0.141</span></div>
+        <div class="flex justify-between"><span>Role:</span><span class="text-slate-300">Metrics collection</span></div>
+        <div class="flex justify-between"><span>Uptime server:</span><span class="text-slate-300">Active</span></div>
+        <div class="flex justify-between"><span>JIT compiler:</span><span class="text-emerald-400">Running</span></div>
+      </div>
+      <div class="text-[9px] text-slate-500 mt-2 text-right italic font-medium">Click to toggle details</div>
     </div>
   </div>
 
@@ -610,14 +634,35 @@ function renderServiceDetail(services) {
     hasData = true;
     const d = services.pi2;
     const item = document.createElement('div');
-    item.className = 'p-2.5 rounded bg-blue-500/10 border border-blue-500/20';
-    item.innerHTML = '<b class="text-blue-400 font-semibold uppercase tracking-wider text-[10px] block mb-1">RPi2 Pi-hole Server</b>' +
-                     '<div class="grid grid-cols-2 gap-2 mt-1">' +
-                     '<div>Active: <span class="text-slate-200 font-mono">' + escapeHtml(d.pihole_active) + '</span></div>' +
-                     '<div>Blocking: <span class="text-slate-200 font-mono">' + escapeHtml(d.blocking) + '</span></div>' +
-                     '<div>Port listening: <span class="text-slate-200 font-mono">' + escapeHtml(d.listening) + '</span></div>' +
-                     '<div>FTL PID: <span class="text-slate-200 font-mono">' + escapeHtml(d.ftl_pid) + '</span></div>' +
-                     '</div>';
+    item.className = 'p-2.5 rounded bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition select-none';
+    
+    const summary = document.createElement('div');
+    summary.innerHTML = '<b class="text-blue-400 font-semibold uppercase tracking-wider text-[10px] flex justify-between items-center">' +
+                        '<span>RPi2 Pi-hole Server</span>' +
+                        '<span class="text-[9px] text-slate-500 font-normal italic">Click to expand</span></b>' +
+                        '<div class="grid grid-cols-2 gap-2 mt-1 text-[11px]">' +
+                        '<div>Status: <span class="text-slate-200 font-semibold">' + escapeHtml(d.pihole_active) + '</span></div>' +
+                        '<div>Blocking: <span class="text-slate-200 font-semibold">' + escapeHtml(d.blocking) + '</span></div>' +
+                        '</div>';
+    
+    const details = document.createElement('div');
+    details.className = 'hidden mt-2 pt-2 border-t border-blue-500/10 text-[10px] text-slate-400 space-y-1.5 font-mono';
+    details.innerHTML = '<div>Port listening: <span class="text-slate-300">' + escapeHtml(d.listening) + '</span></div>' +
+                        '<div>FTL PID: <span class="text-slate-300">' + escapeHtml(d.ftl_pid) + '</span></div>' +
+                        '<div>DNS Server IP: <span class="text-slate-300">10.42.1.109</span></div>' +
+                        '<div>Query Logging: <span class="text-emerald-400">active</span></div>';
+                        
+    item.appendChild(summary);
+    item.appendChild(details);
+    
+    item.onclick = function() {
+      details.classList.toggle('hidden');
+      const textNode = summary.querySelector('span:last-child');
+      if (textNode) {
+        textNode.textContent = details.classList.contains('hidden') ? 'Click to expand' : 'Click to collapse';
+      }
+    };
+    
     el.appendChild(item);
   }
   
@@ -625,14 +670,35 @@ function renderServiceDetail(services) {
     hasData = true;
     const d = services.pi4;
     const item = document.createElement('div');
-    item.className = 'p-2.5 rounded bg-violet-500/10 border border-violet-500/20';
-    item.innerHTML = '<b class="text-violet-400 font-semibold uppercase tracking-wider text-[10px] block mb-1">RPi4 Grafana &amp; Prometheus</b>' +
-                     '<div class="grid grid-cols-2 gap-2 mt-1">' +
-                     '<div>Grafana: <span class="text-slate-200 font-mono">' + escapeHtml(d.grafana) + ' (v' + escapeHtml(d.grafana_version) + ')</span></div>' +
-                     '<div>Prometheus: <span class="text-slate-200 font-mono">' + escapeHtml(d.prometheus) + '</span></div>' +
-                     '<div>Prom Main: <span class="text-slate-200 font-mono">' + escapeHtml(d.prometheus_main) + '</span></div>' +
-                     '<div>Uptime: <span class="text-slate-200 font-mono text-[10px] truncate block">' + escapeHtml(d.uptime) + '</span></div>' +
-                     '</div>';
+    item.className = 'p-2.5 rounded bg-violet-500/10 border border-violet-500/20 cursor-pointer hover:bg-violet-500/15 transition select-none';
+    
+    const summary = document.createElement('div');
+    summary.innerHTML = '<b class="text-violet-400 font-semibold uppercase tracking-wider text-[10px] flex justify-between items-center">' +
+                        '<span>RPi4 Grafana &amp; Prometheus</span>' +
+                        '<span class="text-[9px] text-slate-500 font-normal italic">Click to expand</span></b>' +
+                        '<div class="grid grid-cols-2 gap-2 mt-1 text-[11px]">' +
+                        '<div>Grafana: <span class="text-slate-200 font-semibold">' + escapeHtml(d.grafana) + '</span></div>' +
+                        '<div>Prometheus: <span class="text-slate-200 font-semibold">' + escapeHtml(d.prometheus) + '</span></div>' +
+                        '</div>';
+                        
+    const details = document.createElement('div');
+    details.className = 'hidden mt-2 pt-2 border-t border-violet-500/10 text-[10px] text-slate-400 space-y-1.5 font-mono';
+    details.innerHTML = '<div>Prom Main: <span class="text-slate-300">' + escapeHtml(d.prometheus_main) + '</span></div>' +
+                        '<div>Grafana Version: <span class="text-slate-300">v' + escapeHtml(d.grafana_version) + '</span></div>' +
+                        '<div>Uptime: <span class="text-slate-300 block text-[9px] break-all">' + escapeHtml(d.uptime) + '</span></div>' +
+                        '<div>Node Exporter: <span class="text-emerald-400">active</span></div>';
+                        
+    item.appendChild(summary);
+    item.appendChild(details);
+    
+    item.onclick = function() {
+      details.classList.toggle('hidden');
+      const textNode = summary.querySelector('span:last-child');
+      if (textNode) {
+        textNode.textContent = details.classList.contains('hidden') ? 'Click to expand' : 'Click to collapse';
+      }
+    };
+    
     el.appendChild(item);
   }
   
@@ -657,30 +723,46 @@ function renderCompiles(compiles) {
     const ts = c.timestamp ? new Date(c.timestamp).toLocaleString() : '?';
     const exit = d.exit_code;
     const dur = d.duration ? d.duration + 's' : '?';
+    const trigger = d.triggered_by || 'schedule';
     
     const wrapper = document.createElement('div');
-    wrapper.className = 'p-2.5 rounded border mb-2 ' + 
-                      (status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300');
+    wrapper.className = 'p-2.5 rounded border mb-2 cursor-pointer transition select-none ' + 
+                      (status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15' : 'bg-rose-500/10 border-rose-500/20 text-rose-300 hover:bg-rose-500/15');
                       
     const header = document.createElement('div');
     header.className = 'flex justify-between items-center font-semibold text-[11px] mb-1';
-    header.innerHTML = '<span>Compile run: ' + escapeHtml(ts) + '</span>' +
+    header.innerHTML = '<span class="flex items-center gap-1.5">' +
+                       '<span>Compile run: ' + escapeHtml(ts) + '</span>' +
+                       '<span class="text-[9px] text-slate-500 font-normal italic">(' + escapeHtml(trigger) + ')</span>' +
+                       '</span>' +
                        '<span class="uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900 text-[9px] ' + 
                        (status === 'ok' ? 'text-emerald-400' : 'text-rose-400') + '">' + escapeHtml(status) + '</span>';
                        
     const info = document.createElement('div');
-    info.className = 'text-[10px] text-slate-400 flex gap-4';
-    info.innerHTML = '<span>Exit code: <b class="text-slate-300 monospace-font">' + escapeHtml(exit) + '</b></span>' +
-                     '<span>Duration: <b class="text-slate-300 monospace-font">' + escapeHtml(dur) + '</b></span>';
+    info.className = 'text-[10px] text-slate-400 flex justify-between items-center';
+    info.innerHTML = '<div class="flex gap-4">' +
+                     '<span>Exit code: <b class="text-slate-300 monospace-font">' + escapeHtml(exit) + '</b></span>' +
+                     '<span>Duration: <b class="text-slate-300 monospace-font">' + escapeHtml(dur) + '</b></span>' +
+                     '</div>' +
+                     '<span class="text-[9px] text-slate-500 italic">Click to toggle log</span>';
                      
     wrapper.appendChild(header);
     wrapper.appendChild(info);
     
     if (d.output) {
       const output = document.createElement('pre');
-      output.className = 'text-slate-500 text-[10px] whitespace-pre-wrap mt-2 p-1.5 bg-slate-950/60 rounded border border-slate-900 max-h-32 overflow-y-auto custom-scrollbar monospace-font';
+      output.className = 'hidden text-slate-500 text-[10px] whitespace-pre-wrap mt-3 p-1.5 bg-slate-950/60 rounded border border-slate-900 max-h-32 overflow-y-auto custom-scrollbar monospace-font animate-fadeIn';
       output.textContent = d.output;
       wrapper.appendChild(output);
+      
+      wrapper.onclick = function(e) {
+        if (e.target === output) return;
+        output.classList.toggle('hidden');
+        const textNode = info.querySelector('span:last-child');
+        if (textNode) {
+          textNode.textContent = output.classList.contains('hidden') ? 'Click to toggle log' : 'Click to collapse log';
+        }
+      };
     }
     
     el.appendChild(wrapper);
@@ -1021,6 +1103,24 @@ termScreen.addEventListener('keydown', function(e) {
 
 // Start terminal connection
 connectTerminal();
+
+// Setup Node details collapse
+function setupNodeDetailsToggle() {
+  ['relay', 'pi2', 'pi4'].forEach(name => {
+    const card = document.getElementById(`card-${name}`);
+    const details = document.getElementById(`details-${name}`);
+    if (card && details) {
+      card.onclick = function() {
+        details.classList.toggle('hidden');
+        const textNode = card.querySelector('div:last-child');
+        if (textNode) {
+          textNode.textContent = details.classList.contains('hidden') ? 'Click to toggle details' : 'Click to collapse details';
+        }
+      };
+    }
+  });
+}
+setupNodeDetailsToggle();
 
 // Initial populate runs once on boot.
 // All subsequent updates are streamed immediately in real-time over EventSource!

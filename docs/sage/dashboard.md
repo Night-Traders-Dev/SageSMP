@@ -74,3 +74,17 @@ The dashboard manages the automated nightly cross-compilation of the core `SageL
   It captures the stdout and stderr streams dynamically, registering the results (duration, start/end timestamps, exit code, and complete build log) in the cross-compilation records.
 * **Manual Force**: You can manually trigger the nightly build execution at any time by clicking the **Run Nightly Build** button inside the *Cross-Compile History* card on the web interface. This triggers a `POST` request to `/api/nightly-build`, running the compiler in an asynchronous background worker task.
 
+---
+
+## 5. Interactive Expandable Components
+
+To keep the interface clean and concise, detailed telemetry, configuration, and logs are collapsed by default and can be expanded interactively by clicking on components:
+
+1. **Node Cards (OrangePi, RPi2, RPi4)**:
+   * Click to expand details such as listening IP, port configurations, active authorization types (e.g. XOR cipher), and environment setups.
+2. **Active Services**:
+   * Click to expand service-specific metrics such as specific DNS port listen status, FTL process PID, Grafana versions, and active exporters.
+3. **Cross-Compile History Runs**:
+   * Click to toggle the full compilation logs output block (`pre` block), making it easy to review compile outputs on failure or collapse them on success.
+
+
