@@ -211,9 +211,10 @@ async def stream_reader(stream, node_name):
             parse_telemetry(node_name, line)
         elif "[SERVICES]" in line:
             parse_service_line(node_name, line)
-        elif "[COMPILE]" in line:
-            add_event("compile", "pi4", f"Cross-compile output received")
-            parse_service_line(node_name, line)
+        # Ignore legacy [COMPILE] heartbeats from client to avoid overwriting SageLang build records
+        # elif "[COMPILE]" in line:
+        #     add_event("compile", "pi4", f"Cross-compile output received")
+        #     parse_service_line(node_name, line)
         elif "[ERROR]" in line:
             add_event("error", node_name, line)
         elif "[WARN]" in line:

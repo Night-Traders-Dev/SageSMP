@@ -255,7 +255,9 @@ proc get_pihole_info():
     let raw = io.readfile("/tmp/sagesmp_pihole.json")
     if raw == nil:
         return nil
-    return json_decode(raw)
+    end
+    let cleaned = replace(replace(raw, chr(10), ""), chr(13), "")
+    return json_decode(cleaned)
 
 proc get_rpi2_info():
     let temp = get_cpu_temp()
