@@ -8,3 +8,9 @@ build/
 *.log
 bin/
 *.spv
+
+# Python
+__pycache__/
+*.pyc
+dashboard/venv/
+logs/

@@ -96,9 +96,9 @@ def save_mailboxes():
         pass
 
 state = {
-    "relay": {"name": "OrangePi Relay", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
-    "pi2": {"name": "RPi2 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
-    "pi4": {"name": "RPi4 Client", "proc": None, "tail_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
+    "relay": {"name": "OrangePi Relay", "proc": None, "tail_proc": None, "syslog_proc": None, "pcap_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
+    "pi2": {"name": "RPi2 Client", "proc": None, "tail_proc": None, "syslog_proc": None, "pcap_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
+    "pi4": {"name": "RPi4 Client", "proc": None, "tail_proc": None, "syslog_proc": None, "pcap_proc": None, "logs": [], "status": "stopped", "desired_status": "running", "started_at": None},
     "events": [],
     "telemetry": {"pi2": {}, "pi4": {}},
     "services": {"pi2": {}, "pi4": {}},
@@ -322,6 +322,58 @@ async def start_node(node_name, cmd, cwd=None, env=None):
             except Exception as te:
                 add_event("error", "dashboard", f"Failed to start Pi-hole log tail: {te}")
                 
+            try:
+                n["syslog_proc"] = await asyncio.create_subprocess_exec(
+                    "ssh", "-o", "BatchMode=yes", "pi2", "sudo tail -f -n 0 /var/log/syslog",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                )
+                async def syslog_reader(stream):
+                    while True:
+                        line = await stream.readline()
+                        if not line:
+                            break
+                        line_str = line.decode(errors="replace").rstrip()
+                        if line_str and "[Pi-Hole" in line_str:
+                            parts = line_str.split("kernel: ")
+                            msg_part = parts[-1] if len(parts) > 1 else line_str
+                            add_log("pi2", f"[DNS] {msg_part}")
+                asyncio.create_task(syslog_reader(n["syslog_proc"].stdout))
+            except Exception as se:
+                add_event("error", "dashboard", f"Failed to start Pi-hole syslog tail: {se}")
+
+            # Start tcpdump live packet capture summaries
+            try:
+                n["pcap_proc"] = await asyncio.create_subprocess_exec(
+                    "ssh", "-o", "BatchMode=yes", "pi2", "sudo tcpdump -l -n -i any not port 22 and not port 42000",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                )
+                async def pcap_reader(stream):
+                    while True:
+                        line = await stream.readline()
+                        if not line:
+                            break
+                        line_str = line.decode(errors="replace").rstrip()
+                        if line_str:
+                            # Classify protocol from tcpdump output
+                            proto_tag = "[TCP]"
+                            if " UDP " in line_str:
+                                proto_tag = "[UDP]"
+                            if "DNS" in line_str or "domain" in line_str:
+                                proto_tag = "[DNS]"
+                            if "ICMP" in line_str:
+                                proto_tag = "[ICMP]"
+                            last_dot = line_str.rfind(".")
+                            if last_dot > 0:
+                                port_part = line_str[last_dot+1:].split()[0] if " " in line_str[last_dot+1:] else line_str[last_dot+1:]
+                                if port_part == "443":
+                                    proto_tag = "[HTTPS]"
+                                elif port_part == "80":
+                                    proto_tag = "[HTTP]"
+                            add_log("pi2", f"{proto_tag} {line_str}")
+                asyncio.create_task(pcap_reader(n["pcap_proc"].stdout))
+            except Exception as pe:
+                add_event("error", "dashboard", f"Failed to start packet capture tail: {pe}")
+                
         asyncio.create_task(wait_for_exit(node_name))
     except Exception as e:
         add_event("error", "dashboard", f"Failed to start {n['name']}: {e}")
@@ -339,6 +391,18 @@ async def wait_for_exit(node_name):
         except Exception:
             pass
         n["tail_proc"] = None
+    if n["syslog_proc"]:
+        try:
+            n["syslog_proc"].terminate()
+        except Exception:
+            pass
+        n["syslog_proc"] = None
+    if n["pcap_proc"]:
+        try:
+            n["pcap_proc"].terminate()
+        except Exception:
+            pass
+        n["pcap_proc"] = None
     add_event("system", "dashboard", f"{n['name']} exited (code {n['proc'].returncode})")
 
 async def stop_node(node_name):
@@ -354,6 +418,28 @@ async def stop_node(node_name):
             except Exception:
                 pass
         n["tail_proc"] = None
+        
+    if n["syslog_proc"]:
+        try:
+            n["syslog_proc"].terminate()
+            await asyncio.wait_for(n["syslog_proc"].wait(), timeout=3)
+        except Exception:
+            try:
+                n["syslog_proc"].kill()
+            except Exception:
+                pass
+        n["syslog_proc"] = None
+
+    if n["pcap_proc"]:
+        try:
+            n["pcap_proc"].terminate()
+            await asyncio.wait_for(n["pcap_proc"].wait(), timeout=3)
+        except Exception:
+            try:
+                n["pcap_proc"].kill()
+            except Exception:
+                pass
+        n["pcap_proc"] = None
         
     if not n["proc"] or n["proc"].returncode is not None:
         n["status"] = "stopped"
@@ -760,7 +846,7 @@ async def websocket_terminal(websocket: WebSocket):
                         save_mailboxes()
                         
                         add_event("heartbeat_ack", "SageSMP", f"Mail routed: {src_resolved} -> {dst_resolved} | '{payload}'")
-                        add_service_log_entry("MAIL", src_resolved, {"sender": src_resolved, "recipient": dst_resolved, "payload": payload})
+                        append_service_log({"type": "MAIL", "platform": src_resolved, "data": {"sender": src_resolved, "recipient": dst_resolved, "payload": payload}, "timestamp": dt.datetime.now().isoformat()})
                         
                         await websocket.send_json({"type": "output", "content": f"Mail successfully sent and routed to {dst_resolved}'s mailbox.\r\n\r\n" + prompt})
                         

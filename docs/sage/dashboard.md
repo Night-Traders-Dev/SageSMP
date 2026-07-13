@@ -27,6 +27,22 @@ Every 300ms, the server collects:
 
 All telemetry and logs are parsed on the client side to inject icons, emojis, and formatted metrics.
 
+### Protocol Logging (Pi-hole Packet Capture)
+
+When RPi2 client is running, the dashboard also streams real-time packet capture logs:
+
+1. **Pi-hole DNS Logs** (`[Pi-hole]` tag) — real-time DNS queries from `/var/log/pihole/pihole.log`
+2. **DNS Syslog** (`[DNS]` tag) — Pi-hole iptables kernel logs from `/var/log/syslog`
+3. **Live Packet Capture** — `tcpdump -l -n` output with protocol classification tags:
+   - `[TCP]` — General TCP traffic
+   - `[UDP]` — General UDP traffic
+   - `[DNS]` — DNS query/response packets
+   - `[HTTP]` — Port 80 traffic
+   - `[HTTPS]` — Port 443 traffic
+   - `[ICMP]` — Ping/traceroute packets
+
+These logs appear in the RPi2 console panel with their respective tags for easy filtering.
+
 ---
 
 ## 3. Interactive Web Terminal Console

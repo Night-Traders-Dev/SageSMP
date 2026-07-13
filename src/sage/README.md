@@ -165,7 +165,61 @@ python3 app.py
 
 The dashboard captures process output from the relay and clients via SSE.
 
-### Service Monitoring (Pi-hole, Grafana/Prometheus, Cross-Compile)
+### Pi-hole Ad-Blocking & Protocol Logging
+
+Pi-hole runs on **Pi2/PeachPi** (10.42.1.109) and provides DNS-level ad blocking, query logging, and full packet capture for all cluster devices.
+
+#### DNS Routing
+
+| Device | DNS Server | Route | Notes |
+|--------|-----------|-------|-------|
+| Pi2 | `127.0.0.1:53` | Local | Uses its own Pi-hole instance |
+| OrangePi | `10.42.1.109:53` | Direct | Reaches Pi2 via end0 interface |
+| Pi4 | `10.42.0.1:53` | Via OrangePi | OrangePi NM dnsmasq on end1 forwards to Pi2 |
+
+#### Ad-Blocking
+
+- `pihole enable` — blocks ads at the DNS level
+- `pihole updateGravity` — updates blocklists
+- Privacy level: **0** (log all domains, no anonymization)
+
+#### Query Logging
+
+- `pihole logging on` — all DNS queries logged to `/var/log/pihole/pihole.log`
+- FTL config: `QUERY_LOGGING=true`, `MAXLOGAGE=365`, `VERBOSE=true`
+
+#### Packet Capture (tcpdump)
+
+A systemd service `pihole-capture` runs tcpdump on all interfaces, capturing all protocols (TCP, UDP, DNS, HTTP, HTTPS, ICMP, etc.) except SSH. Files rotate daily with 7-day retention via logrotate.
+
+**Service:** `/etc/systemd/system/pihole-capture.service`
+
+```
+/usr/bin/tcpdump -i any -G 86400 -w /var/log/pihole_traffic/capture_%Y%m%d.pcap -z /usr/bin/gzip -C 5000 not port 22
+```
+
+Output: compressed `.pcap.gz` files in `/var/log/pihole_traffic/` (rotated after 7 days).
+
+#### Monitoring Script
+
+`scripts/sagesmp-pihole.sh` runs via cron every 5 minutes on Pi2, capturing Pi-hole telemetry:
+
+```json
+{"pihole_active":"active","blocking":"enabled","logging":"enabled",
+ "privacy_level":0,"queries_today":1234,"listening":1,"ftl_pid":1255,
+ "pcap_active":"active"}
+```
+
+#### Dashboard Live Console
+
+The dashboard streams four Pi-hole logging feeds to the live console:
+
+1. **`[Pi-hole]`** — Real-time DNS queries from `/var/log/pihole/pihole.log`
+2. **`[DNS]`** — Pi-hole syslog entries from iptables
+3. **`[TCP]` `[UDP]` `[DNS]` `[HTTP]` `[HTTPS]` `[ICMP]`** — Live tcpdump packet summaries with protocol classification tags
+4. **Services panel** — Pi-hole blocking/logging/pcap status from heartbeat telemetry
+
+### Grafana/Prometheus & Cross-Compile (Pi4)
 
 Each client enriches its 60-second heartbeat with extra service telemetry. The relay prints
 `[SERVICES]` and `[COMPILE]` lines, which the dashboard parses into a rolling JSON-lines log
@@ -191,7 +245,8 @@ Shell scripts (cron) -> JSON files on device
 ```json
 // RPi2 -> Relay  (Pi-hole status)
 {"client_id": 1, "platform": "RPi2", "info": "...", "timestamp": 123,
- "services": {"pihole_active": "active", "blocking": "enabled", "listening": 1, "ftl_pid": 1255}}
+ "services": {"pihole_active":"active","blocking":"enabled","logging":"enabled",
+              "privacy_level":0,"queries_today":1234,"listening":1,"ftl_pid":1255,"pcap_active":"active"}}
 
 // RPi4 -> Relay  (Grafana + Prometheus)
 {"client_id": 2, "platform": "RPi4", "info": "...", "timestamp": 123,
@@ -203,9 +258,10 @@ Shell scripts (cron) -> JSON files on device
 
 | Script | Host | Output | Purpose |
 |--------|------|--------|---------|
-| `sagesmp-pihole.sh` | Pi2 | `/tmp/sagesmp_pihole.json` | Pi-hole FTL status, blocking state, listening ports |
+| `sagesmp-pihole.sh` | Pi2 | `/tmp/sagesmp_pihole.json` | Pi-hole FTL status, blocking, logging, pcap state |
 | `sagesmp-services.sh` | Pi4 | `/tmp/sagesmp_services.json` | Grafana server health + Prometheus node-exporter status |
 | `sagesmp-crosscompile.sh` | Pi4 | `/tmp/sagesmp_compile_result.json` | Runs `./sagemake --all`, captures exit code, timestamps, duration, output |
+| `setup-pi4-dns.sh` | Host | N/A | Configure Pi4 DNS via OrangePi relay (run when Pi4 is online) |
 
 **Cron setup** (install via `crontab -e` on each device):
 
@@ -221,6 +277,7 @@ Shell scripts (cron) -> JSON files on device
 **Dashboard panels:**
 
 - **Service Status** — live Pi-hole (RPi2) and Grafana/Prometheus (RPi4) state from the SSE `services` feed.
+- **Protocol Logs** — live packet capture with protocol tags in the console output.
 - **Cross-Compile History** — latest compile runs (status, exit code, duration) from `/api/compiles`.
 - **Service Log** — rolling log of every `[SERVICES]`/`[COMPILE]` event from `/api/service-log`.
 

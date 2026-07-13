@@ -16,6 +16,7 @@ Modular documentation for each SageSMP component.
 | [Client](client.md) | Client class, connection, messaging |
 | [Server](server.md) | Server class, relay, routing |
 | [RTOS](rtos.md) | Task scheduler, GC-aware cleanup |
+| [Pi-hole](pihole.md) | Ad-blocking, DNS logging, packet capture |
 | [Demo](demo.md) | Executable demonstrations |
 | [Dashboard](dashboard.md) | FastAPI real-time console, SSE telemetry, PTY interactive terminal |
 
