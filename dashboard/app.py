@@ -1344,9 +1344,41 @@ async def prometheus_metrics():
         lines.append(f'sagesmp_pihole_blocking{{device="pi2"}} 0')
 
     svc_pi4 = state["services"].get("pi4", {})
-    for svc in ("grafana", "prometheus"):
+    for svc in ("grafana", "prometheus", "alertmanager", "loki"):
         v = 1 if svc_pi4.get(svc) == "active" else 0
         lines.append(f'sagesmp_{svc}_active{{device="pi4"}} {v}')
+
+    # Relay uptime (seconds since relay started)
+    try:
+        started = state["relay"].get("started_at")
+        if started:
+            started_dt = datetime.fromisoformat(started)
+            uptime = (datetime.now() - started_dt).total_seconds()
+            lines.append(f'sagesmp_relay_uptime_seconds {uptime}')
+    except: pass
+
+    # Compilation statistics
+    compiles = state.get("compiles", [])
+    lines.append(f'sagesmp_compile_count {len(compiles)}')
+    if compiles:
+        last = compiles[-1]
+        try:
+            status = last.get("data", {}).get("status", "")
+            s = 0 if status == "ok" else 1
+            lines.append(f'sagesmp_last_compile_status{{platform="{last.get("platform","?")}"}} {s}')
+        except: pass
+        try:
+            last_ts = last.get("timestamp")
+            if last_ts:
+                last_dt = datetime.fromisoformat(last_ts)
+                dur = (datetime.now() - last_dt).total_seconds()
+                lines.append(f'sagesmp_seconds_since_last_compile {dur}')
+        except: pass
+
+    # Relay process status
+    rp = state["relay"]["proc"]
+    relay_up = 1 if rp and rp.returncode is None else 0
+    lines.append(f'sagesmp_relay_running {relay_up}')
 
     return HTMLResponse(_fmt_metrics(lines), media_type="text/plain; charset=utf-8")
 

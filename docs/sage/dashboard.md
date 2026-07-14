@@ -226,6 +226,153 @@ From the dashboard hamburger menu, the **Grafana** item embeds the Grafana login
 
 ```
 http://192.168.254.44:8081/api/proxy/grafana/d/a2lcqz/sagesmp-cluster
+
+**Additional Grafana Dashboards (via file provisioning):**
+- **SageSMP Per-Device Detail**: `/d/a2lcqz/sagesmp-devices`
+- **Pi-hole Query Stats**: `/d/a2lcqz/sagesmp-pihole`
+
+**Accessing Per-Device & Pi-hole dashboards:**
+```
+http://192.168.254.44:8081/api/proxy/grafana/d/a2lcqz/sagesmp-devices
+http://192.168.254.44:8081/api/proxy/grafana/d/a2lcqz/sagesmp-pihole
+```
+
+### Alerting & Email Notifications
+
+**Prometheus Alerts**: Configured with Alertmanager on Pi4 running on port 9093. Notifications are routed to `quegmeister@gmail.com` for both warning and critical levels.
+
+**Alert Types**:
+- CPU temperature warnings (70°C-85°C), critical (>85°C)
+- Memory pressure alerts (low to critical memory levels)
+- Service status (Pi-hole, Grafana, Prometheus, Alertmanager, Loki)
+- Compile failure detection
+- Device connection monitoring
+- External endpoint checks (Blackbox exporter)
+
+**Email Notification Setup**:
+```
+# To use email alerts, create a Gmail App Password at:
+# https://myaccount.google.com/apppasswords
+
+# Update the Alertmanager configuration:
+global:
+  smtp_auth_password: \"YOUR_GMAIL_APP_PASSWORD\"
+  smtp_from: sagesmp@orangepi.local
+  smtp_auth_username: quegmeister@gmail.com
+
+# To receive email alerts from: quegmeister@gmail.com
+# Set up SMTP for Gmail
+```
+
+Alerts are grouped by severity and sent at the following intervals:
+- **Critical alerts**: 30-minute repeat interval
+- **Warning alerts**: 6-hour repeat interval
+
+Alertmanager manages inhibition rules to prevent duplicate alerts (critical alerts suppress duplicates of related warning alerts).
+
+### Grafana Loki
+
+**Centralized Log Management**
+
+Grafana can also consolidate system logs from all cluster nodes via **Loki** (log aggregation). For advanced log analysis, you can run the log shipper setup script to configure remote log forwarding:
+
+```bash
+# On an OrangePi or Pi2 device, set up log forwarding:
+bash /tmp/setup_logshipper.sh
+```
+
+From Grafana, you can query and visualize logs across multiple nodes, enabling centralized debugging and monitoring of system events.
+
+### External Endpoint Monitoring
+
+**Blackbox Exporter**
+
+The stack includes a **Blackbox exporter** for active checks of external endpoints, ensuring observability into:
+
+- **Internal services**: Dashboard (`http://192.168.254.44:8081`), Prometheus (`http://10.42.0.141:9090`), Grafana (`http://10.42.0.141:3000`)
+- **Remote devices**: Pi2 SSH port (`http://10.42.1.109`)
+- **Internet services**: Google (`https://google.com`), GitHub (`https://github.com`)
+
+Blackbox exporter runs on port 9115 on Pi4 and uses standard HTTP (2xx, 301-302, 307) and ICMP checks.
+
+### Persistent Grafana Configuration
+
+All Grafana dashboards are provisioned via configuration files under `conf/grafana/provisioning/dashboards/`:
+
+**Provider configuration** (`sagesmp_provider.yml`):
+```yaml
+providers:
+  - name: SageSMP
+    orgId: 1
+    folder: SageSMP
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/sagesmp
+```
+
+This means dashboards persist across Grafana restarts and are automatically reloaded when updated.
+
+### Resource Usage History & Annotations
+
+The dashboard automatically records service status changes, component start/stop events, and every heartbeat into an **events system**. Grafana supports adding these events as **annotations** to dashboards, showing timeline markers for:
+
+- Node service state changes
+- Cross-compile completions (with platform, duration, exit code)
+- Client connections/disconnections
+- Error and warning events
+
+Annotations appear as colored horizontal bands on the time-based Grafana graphs, providing instant operational context.
+
+### Additional SageSMP Metrics
+
+The **`/api/metrics` endpoint** now also exposes enhanced telemetry:
+
+**New metrics added:**
+- `sagesmp_relay_uptime_seconds`: Seconds since OrangePi relay started
+- `sagesmp_compile_count`: Total number of cross-compile runs
+- `sagesmp_seconds_since_last_compile`: Time since last successful build
+- `sagesmp_relay_running`: 1 if relay process is running
+- Service metrics for `alertmanager`, `grafana`, `loki`, `prometheus`, and `promtail` (all 1 if active)
+
+This expanded Prometheus metric collection provides complete visibility into build pipeline status, relay health, and the entire monitoring stack.
+
+### Prometheus Configuration
+
+Prometheus runs on **Pi4 (10.42.0.141:9090)** and is configured to scrape:
+
+1. **SageSMP metrics**: `http://192.168.254.44:8081/api/metrics` (via `sagesmp` job)
+2. **Node exporters**: Pi4 (localhost:9100), Pi2 (10.42.1.109:9100), OrangePi (10.42.0.1:9100)
+3. **Prometheus itself**: localhost:9090
+
+Configuration file: `/etc/prometheus/prometheus.yml` on Pi4.
+
+### Node Exporters
+
+- **Pi4 (arm64)**: `prometheus-node-exporter` package, port 9100 — already installed.
+- **Pi2 (armhf)**: `prometheus-node-exporter` package, port 9100 — installed.
+- **OrangePi (riscv64)**: `prometheus-node-exporter` package, port 9100 — installed from Ubuntu RISC-V repos.
+
+### Grafana Dashboards
+
+Grafana runs on **Pi4 (10.42.0.141:3000)** and is pre-configured with:
+
+- **Prometheus data source**: Added via provisioning at `/etc/grafana/provisioning/datasources/prometheus.yaml`.
+- **SageSMP Cluster dashboard**: Pre-built dashboard (`/d/a2lcqz/sagesmp-cluster`) with panels for:
+  - CPU temperature, load, and frequency per device
+  - Memory available and total per device
+  - Pi-hole and Grafana/Prometheus service status
+  - Node exporter system metrics (CPU, memory, disk, network)
+- **Anonymous access**: Enabled (Viewer role) for embedded dashboard access through the dashboard proxy.
+- **Admin credentials**: `admin` / `admin` (default).
+
+### Accessing Grafana Dashboards
+
+From the dashboard hamburger menu, the **Grafana** item embeds the Grafana login page via the proxy. After logging in (`admin`/`admin`), you can navigate to the **SageSMP Cluster** dashboard under the Dashboards menu, or access it directly at:
+
+```
+http://192.168.254.44:8081/api/proxy/grafana/d/a2lcqz/sagesmp-cluster
 ```
 
 
