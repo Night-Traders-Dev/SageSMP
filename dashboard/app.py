@@ -727,6 +727,65 @@ async def startup_event():
     asyncio.create_task(cluster_watchdog())
     asyncio.create_task(collect_relay_telemetry())
 
+# ---------------------------------------------------------------------------
+# Cluster terminal helpers
+# ---------------------------------------------------------------------------
+
+CLUSTER_DEVICES = [
+    ("OrangePi", "local", "orangepi"),
+    ("Pi2",      "pi2",    "pi"),
+    ("Pi4",      "pi4",    "ubuntu"),
+]
+
+async def _run_remote_cmd(host_label: str, ssh_host: str, cmd: str) -> str:
+    """Run a command on a remote device and return the output."""
+    try:
+        if ssh_host == "local":
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        else:
+            proc = await asyncio.create_subprocess_exec(
+                "ssh", "-o", "BatchMode=yes", ssh_host, cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        out = stdout.decode(errors="replace")
+        if stderr and stderr.decode(errors="replace").strip():
+            out += "\n[stderr]\n" + stderr.decode(errors="replace")
+        return out
+    except asyncio.TimeoutError:
+        return f"[TIMEOUT] Command timed out after 120s on {host_label}"
+    except Exception as e:
+        return f"[ERROR] {host_label}: {e}"
+
+
+async def _run_cluster_cmd(cmd: str, sudo: bool = False) -> str:
+    """Run a command on all 3 cluster devices simultaneously and aggregate output."""
+    prefix = "sudo " if sudo else ""
+    tasks = []
+    for label, ssh_host, _user in CLUSTER_DEVICES:
+        tasks.append(_run_remote_cmd(label, ssh_host, f"{prefix}{cmd}"))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    lines = []
+    for i, (label, _ssh, _user) in enumerate(CLUSTER_DEVICES):
+        res = results[i]
+        if isinstance(res, Exception):
+            res = f"[ERROR] {res}"
+        lines.append(f"\x1b[1;36m===== {label} =====\x1b[0m")
+        lines.append(res.strip())
+        lines.append("")
+    return "\r\n".join(lines).replace("\n", "\r\n")
+
+
+# ---------------------------------------------------------------------------
+# WebSocket Terminal
+# ---------------------------------------------------------------------------
+
 @app.websocket("/ws/terminal")
 async def websocket_terminal(websocket: WebSocket):
     await websocket.accept()
@@ -774,6 +833,11 @@ async def websocket_terminal(websocket: WebSocket):
                             "  smp-mailboxes    - List SageSMP mailboxes and statistics\r\n"
                             "  smp-read <dev>   - Read pending mail in a device's mailbox\r\n"
                             "  smp-send <s> <d> <msg> - Send a message from device <s> to <d> over SageSMP\r\n"
+                            "  pihole <args>    - Run Pi-hole command on Pi2 (status, enable, disable, -g, etc.)\r\n"
+                            "  grafana <args>   - Manage Grafana on Pi4 (status, restart, logs, etc.)\r\n"
+                            "  prometheus <args> - Manage Prometheus on Pi4 (status, restart, logs, etc.)\r\n"
+                            "  apt <args>       - Run apt on ALL cluster devices simultaneously\r\n"
+                            "  setup-sudo       - Configure passwordless sudo on all devices\r\n"
                             "  clear            - Clear terminal screen\r\n"
                         )
                         await websocket.send_json({"type": "output", "content": output + prompt})
@@ -928,6 +992,89 @@ async def websocket_terminal(websocket: WebSocket):
                         else:
                             await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
                             
+                    elif command.startswith("pihole "):
+                        args = command[7:].strip()
+                        await websocket.send_json({"type": "output", "content": f"Running 'pihole {args}' on Pi2...\r\n"})
+                        out = await _run_remote_cmd("Pi2", "pi2", f"sudo pihole {args}")
+                        await websocket.send_json({"type": "output", "content": out + "\r\n" + prompt})
+
+                    elif command.startswith("grafana "):
+                        args = command[8:].strip()
+                        await websocket.send_json({"type": "output", "content": f"Running grafana command on Pi4...\r\n"})
+                        if args in ("status",):
+                            out = await _run_remote_cmd("Pi4", "pi4", "systemctl status grafana-server --no-pager -l")
+                        elif args in ("restart", "start", "stop", "enable", "disable"):
+                            out = await _run_remote_cmd("Pi4", "pi4", f"sudo systemctl {args} grafana-server")
+                        elif args in ("logs", "log"):
+                            out = await _run_remote_cmd("Pi4", "pi4", "journalctl -u grafana-server --no-pager -n 50")
+                        elif args == "version":
+                            out = await _run_remote_cmd("Pi4", "pi4", "grafana-server -v 2>&1 || systemctl show grafana-server --property=Version")
+                        else:
+                            out = f"Unknown grafana command: {args}\r\nUsage: grafana status|restart|start|stop|enable|disable|logs|version\r\n"
+                        await websocket.send_json({"type": "output", "content": out + "\r\n" + prompt})
+
+                    elif command.startswith("prometheus "):
+                        args = command[11:].strip()
+                        await websocket.send_json({"type": "output", "content": f"Running prometheus command on Pi4...\r\n"})
+                        if args in ("status",):
+                            out = await _run_remote_cmd("Pi4", "pi4", "systemctl status prometheus --no-pager -l")
+                        elif args in ("restart", "start", "stop", "enable", "disable"):
+                            out = await _run_remote_cmd("Pi4", "pi4", f"sudo systemctl {args} prometheus")
+                        elif args in ("logs", "log"):
+                            out = await _run_remote_cmd("Pi4", "pi4", "journalctl -u prometheus --no-pager -n 50")
+                        elif args == "version":
+                            out = await _run_remote_cmd("Pi4", "pi4", "prometheus --version 2>&1 | head -2")
+                        else:
+                            out = f"Unknown prometheus command: {args}\r\nUsage: prometheus status|restart|start|stop|enable|disable|logs|version\r\n"
+                        await websocket.send_json({"type": "output", "content": out + "\r\n" + prompt})
+
+                    elif command.startswith("apt "):
+                        args = command[4:].strip()
+                        if not args:
+                            await websocket.send_json({"type": "output", "content": "Usage: apt <args>\r\n" + prompt})
+                            continue
+                        await websocket.send_json({"type": "output", "content": f"Running 'sudo apt {args}' on ALL cluster devices in parallel...\r\n"})
+                        out = await _run_cluster_cmd(f"env DEBIAN_FRONTEND=noninteractive apt {args}", sudo=True)
+                        await websocket.send_json({"type": "output", "content": out + "\r\n" + prompt})
+
+                    elif command == "setup-sudo" or command.startswith("setup-sudo"):
+                        parts = command.split(None, 1)
+                        password = parts[1] if len(parts) > 1 else "jdy@123"
+                        await websocket.send_json({"type": "output", "content": "Setting up passwordless sudo on all devices...\r\n"})
+
+                        sudoers_line = "%s ALL=(ALL) NOPASSWD: ALL"
+
+                        devs = [
+                            ("OrangePi", "local", "orangepi"),
+                            ("Pi2",      "pi2",    "pi"),
+                            ("Pi4",      "pi4",    "ubuntu"),
+                        ]
+                        for label, ssh_host, user in devs:
+                            await websocket.send_json({"type": "output", "content": f"  {label}..."})
+                            sudoers_line = f"{user} ALL=(ALL) NOPASSWD: ALL"
+                            cmd = f"echo '{password}' | sudo -S sh -c 'echo \"{sudoers_line}\" > /etc/sudoers.d/sagesmp && chmod 440 /etc/sudoers.d/sagesmp'"
+                            if ssh_host == "local":
+                                proc = await asyncio.create_subprocess_shell(
+                                    cmd,
+                                    stdout=asyncio.subprocess.PIPE,
+                                    stderr=asyncio.subprocess.PIPE,
+                                )
+                            else:
+                                proc = await asyncio.create_subprocess_exec(
+                                    "ssh", "-o", "BatchMode=yes", ssh_host, cmd,
+                                    stdout=asyncio.subprocess.PIPE,
+                                    stderr=asyncio.subprocess.PIPE,
+                                )
+                            stdout, stderr = await proc.communicate()
+                            err = stderr.decode(errors="replace") if stderr else ""
+                            if proc.returncode == 0:
+                                await websocket.send_json({"type": "output", "content": " OK\r\n"})
+                            else:
+                                await websocket.send_json({"type": "output", "content": f" FAILED ({err.strip()})\r\n"})
+
+                        out = await _run_cluster_cmd("sudo whoami")
+                        await websocket.send_json({"type": "output", "content": "\r\nVerification:\r\n" + out + "\r\n" + prompt})
+
                     elif command == "clear":
                         await websocket.send_json({"type": "output", "content": "\033[2J\033[H" + prompt})
                         
@@ -1008,6 +1155,92 @@ async def websocket_terminal(websocket: WebSocket):
                 os.close(active_pty["fd"])
             except Exception:
                 pass
+
+# ──────────────────────────────────────────────
+# Proxy routes for Grafana, Prometheus, Logging
+# ──────────────────────────────────────────────
+import httpx
+
+GRAFANA_HOST = "10.42.0.141"
+PROMETHEUS_HOST = "10.42.0.141"
+
+PROXY_TARGETS = {
+    "grafana":   f"http://{GRAFANA_HOST}:3000",
+    "prometheus": f"http://{PROMETHEUS_HOST}:9090",
+}
+
+async def _proxy(service: str, path: str, request: Request):
+    base = PROXY_TARGETS.get(service)
+    if not base:
+        return HTMLResponse("unknown proxy target", status_code=404)
+
+    qs = request.url.query
+
+    # Grafana with serve_from_sub_path=true needs the subpath in the forwarded URL
+    if service == "grafana":
+        target = f"{base}/api/proxy/grafana/{path}"
+    else:
+        target = f"{base}/{path}"
+
+    if qs:
+        target += f"?{qs}"
+
+    proxy_prefix = f"/api/proxy/{service}"
+
+    # Forward relevant headers, exclude hop-by-hop
+    fwd_headers = {}
+    for k, v in request.headers.items():
+        kl = k.lower()
+        if kl in ("host", "content-length", "transfer-encoding", "connection"):
+            continue
+        fwd_headers[k] = v
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+        try:
+            resp = await client.request(
+                method=request.method,
+                url=target,
+                headers=fwd_headers,
+                cookies=request.cookies,
+                content=await request.body(),
+            )
+        except httpx.RequestError as e:
+            return HTMLResponse(f"proxy error: {e}", status_code=502)
+
+        # Forward response headers (skip transfer-encoding to let StreamingResponse set it)
+        out_headers = {}
+        for k, v in resp.headers.items():
+            kl = k.lower()
+            if kl in ("transfer-encoding", "content-encoding", "content-length", "connection", "x-frame-options", "content-security-policy"):
+                continue
+            # Rewrite Location header so redirects go through the proxy
+            # Skip if upstream already includes the proxy prefix (e.g., Grafana serve_from_sub_path)
+            if kl == "location" and v.startswith("/") and not v.startswith(proxy_prefix):
+                v = proxy_prefix + v
+            out_headers[k] = v
+
+        return StreamingResponse(
+            resp.aiter_bytes(),
+            status_code=resp.status_code,
+            headers=out_headers,
+            media_type=resp.headers.get("content-type"),
+        )
+
+@app.api_route("/api/proxy/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def proxy_grafana_root(request: Request):
+    return await _proxy("grafana", "", request)
+
+@app.api_route("/api/proxy/grafana/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def proxy_grafana(path: str, request: Request):
+    return await _proxy("grafana", path, request)
+
+@app.api_route("/api/proxy/prometheus", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def proxy_prometheus_root(request: Request):
+    return await _proxy("prometheus", "", request)
+
+@app.api_route("/api/proxy/prometheus/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def proxy_prometheus(path: str, request: Request):
+    return await _proxy("prometheus", path, request)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8081)

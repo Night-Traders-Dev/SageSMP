@@ -383,6 +383,7 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
 
 ### Terminal Commands
 
+#### General Commands
 * `help` - Show available console tools.
 * `status` - Tabulate status (Running, Stopped, PID, Log Count) of all cluster nodes.
 * `info <device>` - Execute system telemetry queries (`uptime`, `free -h`, `df -h /`, `uname -a`) on OrangePi, pi2, or pi4.
@@ -396,6 +397,37 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
 * `smp-mailboxes` - List active SageSMP mailboxes, pending message counts, and delivery metrics.
 * `smp-read <device>` - Fetch and display all queued messages inside the target device's mailbox.
 * `smp-send <src_device> <dst_device> <message>` - Compose and dispatch a message from a source device to a destination device's mailbox across SageSMP.
+
+#### Service Management Commands
+
+* `pihole <args>` - Run Pi-hole commands on the Pi2 node. Examples:
+  * `pihole status` - Show blocking status.
+  * `pihole enable` / `pihole disable` - Toggle ad-blocking.
+  * `pihole -g` - Update gravity (ad lists).
+  * `pihole restartdns` - Restart DNS resolver.
+  * `pihole logging on` / `pihole logging off` - Toggle DNS query logging.
+
+* `grafana <args>` - Manage Grafana on Pi4. Examples:
+  * `grafana status` - Show service status.
+  * `grafana restart` / `grafana start` / `grafana stop` - Control the service.
+  * `grafana logs` - Show the last 50 log lines.
+
+* `prometheus <args>` - Manage Prometheus on Pi4. Examples:
+  * `prometheus status` - Show service status.
+  * `prometheus restart` / `prometheus start` / `prometheus stop` - Control the service.
+  * `prometheus logs` - Show the last 50 log lines.
+
+#### Cluster-Wide Apt
+
+* `apt <args>` - Run `sudo apt <args>` on **all three devices simultaneously** (OrangePi, Pi2, Pi4). Output is labelled per-device and aggregated. Examples:
+  * `apt update` - Refresh package lists across the cluster.
+  * `apt upgrade` - Upgrade packages on all devices.
+  * `apt update && apt dist-upgrade` - Full system update.
+  * `apt install <package>` - Install a package cluster-wide.
+
+#### Setup
+
+* `setup-sudo` - Configure passwordless sudo on all three devices (required for `apt`, service management, and Pi-hole commands). Creates `/etc/sudoers.d/sagesmp` on each device. Optionally accepts a custom password: `setup-sudo <password>`. A standalone script is also available at `scripts/setup-sudo.sh`.
 
 ## License
 

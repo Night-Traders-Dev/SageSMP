@@ -58,6 +58,52 @@ On startup, the terminal is independent of all cluster processes and presents a 
 * **`start <device>`** / **`stop <device>`**: Run the startup/shutdown process on the OrangePi, RPi2, or RPi4.
 * **`clear`**: Clear the terminal screen.
 
+### Service Management Commands
+
+The terminal provides shortcuts for managing cluster services:
+
+* **`pihole <args>`**: Run Pi-hole commands directly on the Pi2 node. Examples:
+  * `pihole status` — Show current Pi-hole blocking status.
+  * `pihole enable` / `pihole disable` — Enable or disable ad-blocking.
+  * `pihole disable 5m` — Disable blocking for 5 minutes.
+  * `pihole -g` — Update Pi-hole gravity (ad lists).
+  * `pihole restartdns` — Restart the DNS resolver.
+  * `pihole logging on` / `pihole logging off` — Toggle DNS query logging.
+
+* **`grafana <args>`**: Manage the Grafana instance on Pi4. Examples:
+  * `grafana status` — Show Grafana service status and recent logs.
+  * `grafana restart` / `grafana start` / `grafana stop` — Control the Grafana service.
+  * `grafana enable` / `grafana disable` — Enable/disable service on boot.
+  * `grafana logs` — Show the last 50 journald log lines for Grafana.
+  * `grafana version` — Display the installed Grafana version.
+
+* **`prometheus <args>`**: Manage the Prometheus instance on Pi4. Examples:
+  * `prometheus status` — Show Prometheus service status.
+  * `prometheus restart` / `prometheus start` / `prometheus stop` — Control the Prometheus service.
+  * `prometheus logs` — Show the last 50 journald log lines for Prometheus.
+  * `prometheus version` — Display the installed Prometheus version.
+
+### Cluster-Wide Apt
+
+The terminal supports running `apt` commands across all three cluster devices simultaneously:
+
+* **`apt <args>`**: Runs `sudo apt <args>` on OrangePi, Pi2, and Pi4 in parallel. Output from each device is labeled and displayed together. Examples:
+  * `apt update` — Refresh package lists on all devices.
+  * `apt upgrade` — Upgrade packages on all devices.
+  * `apt update && apt dist-upgrade` — Full system update across the cluster.
+  * `apt install <package>` — Install a package on all three machines.
+
+  > **Note:** Requires passwordless sudo to be configured on each device (see `setup-sudo` command).
+
+### Passwordless Sudo Setup
+
+* **`setup-sudo`**: Configures `NOPASSWD` sudo access on all three cluster devices by creating `/etc/sudoers.d/sagesmp`. This is required for the `apt` and service management commands to work without interactive password prompts. The default password (`jdy@123`) is used; you can provide an alternate password as an argument: `setup-sudo <password>`.
+
+  You can also run the standalone shell script from the host machine:
+  ```bash
+  ./scripts/setup-sudo.sh
+  ```
+
 ### Connection Mode: `sc` (Sage Connect)
 The `sc` command establishes a raw, interactive session directly to a device shell:
 

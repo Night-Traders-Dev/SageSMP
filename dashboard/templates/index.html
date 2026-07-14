@@ -74,6 +74,11 @@
       <p class="text-xs sm:text-sm text-slate-400 mt-1">Real-Time Mailbox Routing Control &amp; Distributed Service Monitoring</p>
     </div>
     <div class="flex gap-3 items-center">
+      <button id="btn-menu" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 text-indigo-400 hover:text-indigo-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 transition duration-150 flex items-center justify-center" title="Open Dashboard Menu">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
       <button id="btn-terminal" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 text-indigo-400 hover:text-indigo-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 transition duration-150 flex items-center justify-center" title="Open Terminal Console">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -87,6 +92,74 @@
       </button>
     </div>
   </header>
+
+  <!-- Hamburger Drawer -->
+  <div id="menu-drawer" class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900/95 backdrop-blur-xl border-r border-slate-700 shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <div class="flex items-center justify-between px-4 py-4 border-b border-slate-800">
+      <span class="text-sm font-semibold uppercase tracking-wider text-indigo-300">Dashboard Menu</span>
+      <button id="btn-close-menu" class="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 py-1 mt-2">Visualizations</div>
+      <button class="menu-item w-full text-left px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-indigo-500/10 border border-slate-700/50 hover:border-indigo-500/30 text-slate-300 hover:text-indigo-300 transition flex items-center gap-3" data-target="grafana">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <div><div class="text-sm font-medium">Grafana Dashboards</div><div class="text-[10px] text-slate-500">Real-time metrics &amp; charts</div></div>
+      </button>
+      <button class="menu-item w-full text-left px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-rose-500/10 border border-slate-700/50 hover:border-rose-500/30 text-slate-300 hover:text-rose-300 transition flex items-center gap-3" data-target="prometheus">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+        <div><div class="text-sm font-medium">Prometheus Graphs</div><div class="text-[10px] text-slate-500">Time-series &amp; query explorer</div></div>
+      </button>
+      <button class="menu-item w-full text-left px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-emerald-500/10 border border-slate-700/50 hover:border-emerald-500/30 text-slate-300 hover:text-emerald-300 transition flex items-center gap-3" data-target="logging">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <div><div class="text-sm font-medium">Logging Console</div><div class="text-[10px] text-slate-500">Cluster &amp; service log viewer</div></div>
+      </button>
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 py-1 mt-4">Services</div>
+      <button class="menu-item w-full text-left px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-sky-500/10 border border-slate-700/50 hover:border-sky-500/30 text-slate-300 hover:text-sky-300 transition flex items-center gap-3" data-target="node-exporter">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+        <div><div class="text-sm font-medium">Node Exporter</div><div class="text-[10px] text-slate-500">Hardware metrics overview</div></div>
+      </button>
+    </div>
+    <div class="border-t border-slate-800 px-4 py-3 text-[10px] text-slate-600">
+      <span>Connected to <span class="text-indigo-400 font-semibold">SageSMP</span> v1.0</span>
+    </div>
+  </div>
+
+  <!-- Iframe Modal -->
+  <div id="iframe-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-panel w-full rounded-xl shadow-2xl overflow-hidden border border-slate-700/80 flex flex-col" style="max-width: 95vw; height: 90vh;">
+      <div class="flex justify-between items-center px-4 py-3 bg-slate-900/90 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <span id="iframe-modal-title" class="font-semibold text-slate-200 text-sm"></span>
+          <span id="iframe-modal-status" class="px-2 py-0.5 text-[9px] rounded font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400">Live</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <a id="iframe-open-new" href="#" target="_blank" class="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-sky-400 rounded-lg transition" title="Open in new tab">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+          <button id="btn-close-iframe" class="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <iframe id="iframe-content" class="w-full flex-1 bg-slate-900" style="min-height: 0;" frameborder="0"></iframe>
+    </div>
+  </div>
 
   <!-- Topology SVG Panel -->
   <div class="glass-panel rounded-xl p-4 md:p-6 mb-6 shadow-2xl">
@@ -1208,6 +1281,160 @@ function setupNodeDetailsToggle() {
   });
 }
 setupNodeDetailsToggle();
+
+// ──────────────────────────────────────────
+// Hamburger Menu & Iframe Modal
+// ──────────────────────────────────────────
+const menuDrawer = document.getElementById('menu-drawer');
+const btnMenu = document.getElementById('btn-menu');
+const btnCloseMenu = document.getElementById('btn-close-menu');
+
+const iframeModal = document.getElementById('iframe-modal');
+const iframeContent = document.getElementById('iframe-content');
+const iframeTitle = document.getElementById('iframe-modal-title');
+const iframeOpenNew = document.getElementById('iframe-open-new');
+const btnCloseIframe = document.getElementById('btn-close-iframe');
+
+const menuTargets = {
+  grafana:   { url: '/api/proxy/grafana', title: 'Grafana Dashboards', icon: '📊' },
+  prometheus:{ url: '/api/proxy/prometheus/graph', title: 'Prometheus Graphs', icon: '📈' },
+  logging:   { url: null, title: 'Logging Console', icon: '📋', inline: true },
+  'node-exporter': { url: '/api/proxy/prometheus/graph?g0.expr=node_cpu_seconds_total&g0.tab=0', title: 'Node Exporter Metrics', icon: '🖥️' },
+};
+
+function openDrawer() {
+  menuDrawer.classList.remove('-translate-x-full');
+  menuDrawer.classList.add('translate-x-0');
+}
+
+function closeDrawer() {
+  menuDrawer.classList.remove('translate-x-0');
+  menuDrawer.classList.add('-translate-x-full');
+}
+
+btnMenu.addEventListener('click', openDrawer);
+btnCloseMenu.addEventListener('click', closeDrawer);
+
+// Click outside drawer to close
+menuDrawer.addEventListener('click', function(e) {
+  if (e.target === menuDrawer) closeDrawer();
+});
+
+function openIframeModal(title, url, externalUrl) {
+  iframeTitle.textContent = title;
+  iframeContent.src = url;
+  if (externalUrl) {
+    iframeOpenNew.href = externalUrl;
+    iframeOpenNew.style.display = '';
+  } else {
+    iframeOpenNew.style.display = 'none';
+  }
+  iframeModal.classList.remove('hidden');
+  iframeModal.classList.add('flex');
+}
+
+function closeIframeModal() {
+  iframeModal.classList.remove('flex');
+  iframeModal.classList.add('hidden');
+  iframeContent.src = 'about:blank';
+}
+
+btnCloseIframe.addEventListener('click', closeIframeModal);
+iframeModal.addEventListener('click', function(e) {
+  if (e.target === iframeModal) closeIframeModal();
+});
+
+// Menu item click handlers
+document.querySelectorAll('.menu-item').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const target = this.dataset.target;
+    const cfg = menuTargets[target];
+    if (!cfg) return;
+    closeDrawer();
+
+    if (cfg.inline) {
+      // Inline logging view: mirror the main service log container
+      iframeTitle.textContent = cfg.title;
+      iframeContent.style.display = 'none';
+      iframeOpenNew.style.display = 'none';
+
+      let logPanel = document.getElementById('inline-log-panel');
+      if (!logPanel) {
+        logPanel = document.createElement('div');
+        logPanel.id = 'inline-log-panel';
+        logPanel.className = 'flex-1 flex flex-col bg-slate-950/90 p-4 overflow-hidden';
+        iframeModal.querySelector('.glass-panel').appendChild(logPanel);
+      }
+      logPanel.style.display = 'flex';
+      logPanel.innerHTML = '';
+
+      const logHeader = document.createElement('div');
+      logHeader.className = 'flex items-center justify-between mb-3 shrink-0';
+      logHeader.innerHTML = '<div class="flex gap-2"><span class="px-2 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider">SERVICE LOG</span><span class="px-2 py-0.5 text-[10px] rounded bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-wider">LIVE</span></div>';
+      const logClearBtn = document.createElement('button');
+      logClearBtn.className = 'text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-750 text-slate-300 rounded transition font-medium uppercase tracking-wider';
+      logClearBtn.textContent = 'Clear';
+      logHeader.appendChild(logClearBtn);
+      logPanel.appendChild(logHeader);
+
+      const logView = document.createElement('div');
+      logView.id = 'menu-log-view';
+      logView.className = 'flex-1 bg-slate-950/80 border border-slate-850 rounded-lg p-3 overflow-y-auto monospace-font text-[11px] leading-relaxed custom-scrollbar';
+      logPanel.appendChild(logView);
+
+      const svcLog = document.getElementById('service-log-container');
+      logView.innerHTML = svcLog ? svcLog.innerHTML : '<div class="text-slate-500 italic">No log entries</div>';
+      logView.scrollTop = logView.scrollHeight;
+
+      // MutationObserver to mirror new entries from main log
+      if (!window._menuLogObserver) {
+        const svcLogEl = document.getElementById('service-log-container');
+        if (svcLogEl) {
+          window._menuLogObserver = new MutationObserver(function() {
+            const mlv = document.getElementById('menu-log-view');
+            if (!mlv || !mlv.parentElement || mlv.parentElement.style.display === 'none') return;
+            // Copy any divs from svcLog that aren't in mlv yet
+            const svcChildren = svcLogEl.children;
+            const mlvCount = mlv.children.length;
+            while (mlv.children.length < svcChildren.length) {
+              const clone = svcChildren[mlv.children.length].cloneNode(true);
+              mlv.appendChild(clone);
+            }
+            mlv.scrollTop = mlv.scrollHeight;
+          });
+          window._menuLogObserver.observe(svcLogEl, { childList: true, subtree: false });
+        }
+      }
+
+      logClearBtn.addEventListener('click', function() {
+        logView.innerHTML = '';
+        if (svcLog) svcLog.innerHTML = '';
+      });
+
+      iframeModal.classList.remove('hidden');
+      iframeModal.classList.add('flex');
+      return;
+    }
+
+    // Show iframe
+    iframeContent.style.display = '';
+    const inlinePanel = document.getElementById('inline-log-panel');
+    if (inlinePanel) inlinePanel.style.display = 'none';
+
+    const proxyUrl = cfg.url;
+    const externalUrl = target === 'grafana' ? 'http://10.42.0.141:3000'
+                     : target === 'prometheus' ? 'http://10.42.0.141:9090'
+                     : null;
+    openIframeModal(cfg.title, proxyUrl, externalUrl);
+  });
+});
+
+// Keyboard shortcut: Escape closes iframe
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (!iframeModal.classList.contains('hidden')) closeIframeModal();
+  }
+});
 
 // Initial populate runs once on boot.
 // All subsequent updates are streamed immediately in real-time over EventSource!
