@@ -284,6 +284,29 @@ Shell scripts (cron) -> JSON files on device
 > Note: the cross-compile `output` field contains newlines escaped as `\n`; the Sage JSON codec
 > preserves them through the decode/encode round-trip so they render correctly in the dashboard.
 
+### Prometheus & Grafana Monitoring
+
+The dashboard exposes SageSMP heartbeat telemetry as native Prometheus metrics via `/api/metrics` on the OrangePi, enabling Prometheus (running on Pi4 at `10.42.0.141:9090`) to scrape cluster data directly.
+
+**Metrics endpoint**: `http://192.168.254.44:8081/api/metrics` exposes:
+- `sagesmp_cpu_temp_celsius{device="..."}` — CPU temperature per device
+- `sagesmp_cpu_load{device="..."}` — CPU load average
+- `sagesmp_memory_available_bytes{device="..."}` — available memory per device
+- `sagesmp_cpu_freq_hz{device="..."}` — current CPU frequency
+- `sagesmp_connected_clients` — clients connected to relay
+- `sagesmp_up{device="..."}` — device connectivity (1=connected)
+- `sagesmp_pihole_active/blocking`, `sagesmp_grafana_active`, `sagesmp_prometheus_active` — service status
+
+**Node exporters** (port 9100) run on all three devices:
+- OrangePi (riscv64): installed from Ubuntu repos
+- Pi2 (armhf): `prometheus-node-exporter` package
+- Pi4 (arm64): `prometheus-node-exporter` package
+
+**Grafana** (Pi4 at `10.42.0.141:3000`) has:
+- Prometheus data source provisioned at `/etc/grafana/provisioning/datasources/prometheus.yaml`
+- Pre-built **SageSMP Cluster** dashboard (`/d/a2lcqz/sagesmp-cluster`) with CPU, memory, service status, and node_exporter system panels
+- Anonymous read-only access enabled for embedded use through the dashboard proxy
+
 ## Mailbox System
 
 The mailbox system provides FIFO message queues with optional capacity limits:

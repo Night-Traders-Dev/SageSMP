@@ -161,4 +161,71 @@ The console terminal supports direct cluster mailbox operations to manage, read,
 
 *Note: The terminal console uses non-wrapping `whitespace-pre` layout with horizontal scrolling to display long commands and mailbox grids cleanly without formatting breakups.*
 
+---
+
+## 7. Prometheus & Grafana Monitoring
+
+The dashboard exposes a Prometheus metrics endpoint at `/api/metrics` that converts SageSMP heartbeat telemetry into native Prometheus metrics. This enables the cluster's Prometheus instance (running on Pi4) to scrape SageSMP telemetry alongside standard node_exporter metrics.
+
+### Prometheus Metrics Endpoint
+
+**URL**: `http://<orangepi-ip>:8081/api/metrics`
+
+The endpoint exposes the following metric families:
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `sagesmp_cpu_temp_celsius` | `device` (orangepi, pi2, pi4) | CPU temperature from each device |
+| `sagesmp_cpu_load` | `device` | CPU load average |
+| `sagesmp_memory_available_bytes` | `device` | Available memory |
+| `sagesmp_memory_total_bytes` | `device` | Total memory |
+| `sagesmp_cpu_freq_hz` | `device` | Current CPU frequency |
+| `sagesmp_gpu_temp_celsius` | `device` | GPU temperature (Pi4 only) |
+| `sagesmp_throttling` | `device` | Throttling status (1=throttled, Pi4 only) |
+| `sagesmp_connected_clients` | (none) | Number of clients connected to the relay |
+| `sagesmp_up` | `device` | 1 if device is connected |
+| `sagesmp_pihole_active` | `device` | 1 if Pi-hole is active (Pi2) |
+| `sagesmp_pihole_blocking` | `device` | 1 if Pi-hole blocking is enabled (Pi2) |
+| `sagesmp_grafana_active` | `device` | 1 if Grafana is active (Pi4) |
+| `sagesmp_prometheus_active` | `device` | 1 if Prometheus is active (Pi4) |
+
+All metrics are updated every 60 seconds as SageSMP heartbeats arrive from the cluster devices.
+
+### Prometheus Configuration
+
+Prometheus runs on **Pi4 (10.42.0.141:9090)** and is configured to scrape:
+
+1. **SageSMP metrics**: `http://192.168.254.44:8081/api/metrics` (via `sagesmp` job)
+2. **Node exporters**: Pi4 (localhost:9100), Pi2 (10.42.1.109:9100), OrangePi (10.42.0.1:9100)
+3. **Prometheus itself**: localhost:9090
+
+Configuration file: `/etc/prometheus/prometheus.yml` on Pi4.
+
+### Node Exporters
+
+- **Pi4 (arm64)**: `prometheus-node-exporter` package, port 9100 — already installed.
+- **Pi2 (armhf)**: `prometheus-node-exporter` package, port 9100 — installed.
+- **OrangePi (riscv64)**: `prometheus-node-exporter` package, port 9100 — installed from Ubuntu RISC-V repos.
+
+### Grafana Dashboards
+
+Grafana runs on **Pi4 (10.42.0.141:3000)** and is pre-configured with:
+
+- **Prometheus data source**: Added via provisioning at `/etc/grafana/provisioning/datasources/prometheus.yaml`.
+- **SageSMP Cluster dashboard**: Pre-built dashboard (`/d/a2lcqz/sagesmp-cluster`) with panels for:
+  - CPU temperature, load, and frequency per device
+  - Memory available and total per device
+  - Pi-hole and Grafana/Prometheus service status
+  - Node exporter system metrics (CPU, memory, disk, network)
+- **Anonymous access**: Enabled (Viewer role) for embedded dashboard access through the dashboard proxy.
+- **Admin credentials**: `admin` / `admin` (default).
+
+### Accessing Grafana Dashboards
+
+From the dashboard hamburger menu, the **Grafana** item embeds the Grafana login page via the proxy. After logging in (`admin`/`admin`), you can navigate to the **SageSMP Cluster** dashboard under the Dashboards menu, or access it directly at:
+
+```
+http://192.168.254.44:8081/api/proxy/grafana/d/a2lcqz/sagesmp-cluster
+```
+
 

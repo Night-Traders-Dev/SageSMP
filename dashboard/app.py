@@ -1226,6 +1226,135 @@ async def _proxy(service: str, path: str, request: Request):
             media_type=resp.headers.get("content-type"),
         )
 
+# ---------------------------------------------------------------------------
+# Prometheus metrics endpoint - exposes SageSMP telemetry for scraping
+# ---------------------------------------------------------------------------
+
+PROM_METRICS_HEADER = "# HELP sagesmp SageSMP cluster telemetry\n# TYPE sagesmp gauge\n"
+
+def _fmt_metrics(lines: list[str]) -> str:
+    return PROM_METRICS_HEADER + "\n".join(lines) + "\n"
+
+@app.get("/api/metrics")
+async def prometheus_metrics():
+    lines = []
+
+    # OrangePi (relay) telemetry
+    rtel = state["telemetry"].get("relay", {})
+    try:
+        lines.append(f'sagesmp_cpu_temp_celsius{{device="orangepi"}} {float(rtel.get("temp", 0))}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_load{{device="orangepi"}} {float(rtel.get("load", 0))}')
+    except: pass
+    try:
+        mem = rtel.get("memory", "0")
+        val = re.search(r'(\d+)', mem)
+        if val:
+            lines.append(f'sagesmp_memory_available_bytes{{device="orangepi"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        rt = rtel.get("ram_total", "0")
+        val = re.search(r'(\d+)', rt)
+        if val:
+            lines.append(f'sagesmp_memory_total_bytes{{device="orangepi"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_freq_hz{{device="orangepi"}} {float(rtel.get("cpu_mhz", 0)) * 1_000_000}')
+    except: pass
+
+    # Pi2 telemetry
+    p2 = state["telemetry"].get("pi2", {})
+    try:
+        lines.append(f'sagesmp_cpu_temp_celsius{{device="pi2"}} {float(p2.get("temp", 0))}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_load{{device="pi2"}} {float(p2.get("load", 0))}')
+    except: pass
+    try:
+        mem = p2.get("memory", "0")
+        val = re.search(r'(\d+)', mem)
+        if val:
+            lines.append(f'sagesmp_memory_available_bytes{{device="pi2"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        rt = p2.get("ram_total", "0")
+        val = re.search(r'(\d+)', rt)
+        if val:
+            lines.append(f'sagesmp_memory_total_bytes{{device="pi2"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_freq_hz{{device="pi2"}} {float(p2.get("cpu_mhz", 0)) * 1_000_000}')
+    except: pass
+
+    # Pi4 telemetry
+    p4 = state["telemetry"].get("pi4", {})
+    try:
+        lines.append(f'sagesmp_cpu_temp_celsius{{device="pi4"}} {float(p4.get("temp", 0))}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_load{{device="pi4"}} {float(p4.get("load", 0))}')
+    except: pass
+    try:
+        mem = p4.get("memory", "0")
+        val = re.search(r'(\d+)', mem)
+        if val:
+            lines.append(f'sagesmp_memory_available_bytes{{device="pi4"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        rt = p4.get("ram_total", "0")
+        val = re.search(r'(\d+)', rt)
+        if val:
+            lines.append(f'sagesmp_memory_total_bytes{{device="pi4"}} {float(val.group(1)) * 1024 * 1024}')
+    except: pass
+    try:
+        lines.append(f'sagesmp_cpu_freq_hz{{device="pi4"}} {float(p4.get("cpu_mhz", 0)) * 1_000_000}')
+    except: pass
+    try:
+        gpu = p4.get("gpu_temp", "0")
+        if gpu not in ("N/A", ""):
+            lines.append(f'sagesmp_gpu_temp_celsius{{device="pi4"}} {float(gpu)}')
+    except: pass
+    try:
+        throttling = 1 if p4.get("throttling") == "THROTTLED" else 0
+        lines.append(f'sagesmp_throttling{{device="pi4"}} {throttling}')
+    except: pass
+
+    # Connected clients from relay telemetry
+    relay_telem = state["telemetry"].get("relay", {})
+    try:
+        lines.append(f'sagesmp_connected_clients {relay_telem.get("node_count", 0)}')
+    except: pass
+
+    # Up status for each device (based on last telemetry timestamp or state)
+    for dev in ("pi2", "pi4"):
+        n = state.get(dev, {})
+        up = 1 if n.get("status") == "running" else 0
+        lines.append(f'sagesmp_up{{device="{dev}"}} {up}')
+
+    # Service status
+    svc_pi2 = state["services"].get("pi2", {})
+    if svc_pi2.get("pihole_active") == "active":
+        lines.append(f'sagesmp_pihole_active{{device="pi2"}} 1')
+    else:
+        lines.append(f'sagesmp_pihole_active{{device="pi2"}} 0')
+    if svc_pi2.get("blocking") == "enabled":
+        lines.append(f'sagesmp_pihole_blocking{{device="pi2"}} 1')
+    else:
+        lines.append(f'sagesmp_pihole_blocking{{device="pi2"}} 0')
+
+    svc_pi4 = state["services"].get("pi4", {})
+    for svc in ("grafana", "prometheus"):
+        v = 1 if svc_pi4.get(svc) == "active" else 0
+        lines.append(f'sagesmp_{svc}_active{{device="pi4"}} {v}')
+
+    return HTMLResponse(_fmt_metrics(lines), media_type="text/plain; charset=utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Proxy routes
+# ---------------------------------------------------------------------------
+
 @app.api_route("/api/proxy/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
 async def proxy_grafana_root(request: Request):
     return await _proxy("grafana", "", request)
