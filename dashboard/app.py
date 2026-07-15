@@ -194,6 +194,13 @@ async def collect_relay_telemetry():
                 info["temp"] = f"{temp_val:.1f}"
             else:
                 info["temp"] = "45.0"
+
+            gpu_file = Path("/sys/class/thermal/thermal_zone1/temp")
+            if gpu_file.exists():
+                gpu_val = float(gpu_file.read_text().strip()) / 1000.0
+                info["gpu_temp"] = f"{gpu_val:.1f}"
+            else:
+                info["gpu_temp"] = info.get("temp", "45.0")
                 
             load_file = Path("/proc/loadavg")
             if load_file.exists():
@@ -510,18 +517,15 @@ async def get_events():
 
 @app.post("/api/start")
 async def start_all():
-    sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
-    
-    # Expose port environment to relay
     env = os.environ.copy()
     env["SMP_PORT"] = str(SMP_PORT)
-    await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
+    await start_node("relay", ["stdbuf", "-oL", "sage", "--runtime", "jit", "-I", str(SAGEMAP_DIR / "src"), str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
     await asyncio.sleep(0.5)
     
     # Start clients with SSH BatchMode for reliability
-    await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+    await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi2_client.sage"])
     await asyncio.sleep(0.5)
-    await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+    await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi4_client.sage"])
     return {"status": "ok"}
 
 @app.post("/api/stop")
@@ -709,14 +713,13 @@ async def cluster_watchdog():
                     add_event("warning", "dashboard", f"Watchdog: {n['name']} stopped. Auto-restarting...")
                     try:
                         if name == "relay":
-                            sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
                             env = os.environ.copy()
                             env["SMP_PORT"] = str(SMP_PORT)
-                            await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
+                            await start_node("relay", ["stdbuf", "-oL", "sage", "--runtime", "jit", "-I", str(SAGEMAP_DIR / "src"), str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
                         elif name == "pi2":
-                            await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+                            await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi2_client.sage"])
                         elif name == "pi4":
-                            await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+                            await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi4_client.sage"])
                     except Exception as re:
                         add_event("error", "dashboard", f"Watchdog failed to restart {n['name']}: {re}")
         await asyncio.sleep(10)
@@ -969,14 +972,13 @@ async def websocket_terminal(websocket: WebSocket):
                             await websocket.send_json({"type": "output", "content": "Starting all nodes...\r\n\r\n" + prompt})
                         elif device in state:
                             if device == "relay":
-                                sage_cmd = ["stdbuf", "-oL", "sage", "--jit"]
                                 env = os.environ.copy()
                                 env["SMP_PORT"] = str(SMP_PORT)
-                                await start_node("relay", sage_cmd + [str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
+                                await start_node("relay", ["stdbuf", "-oL", "sage", "--runtime", "jit", "-I", str(SAGEMAP_DIR / "src"), str(SAGEMAP_DIR / "src" / "sage" / "server" / "orangepi_relay.sage")], cwd=str(SAGEMAP_DIR), env=env)
                             elif device == "pi2":
-                                await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi2_client.sage"])
+                                await start_node("pi2", ["ssh", "-o", "BatchMode=yes", "pi2", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi2_client.sage"])
                             elif device == "pi4":
-                                await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --jit src/sage/client/rpi4_client.sage"])
+                                await start_node("pi4", ["ssh", "-o", "BatchMode=yes", "pi4", f"cd ~/SageSMP && exec env SMP_HOST={SMP_HOST} SMP_PORT={SMP_PORT} stdbuf -oL sage --runtime jit -I src src/sage/client/rpi4_client.sage"])
                             await websocket.send_json({"type": "output", "content": f"Starting {device}...\r\n\r\n" + prompt})
                         else:
                             await websocket.send_json({"type": "output", "content": f"Unknown device: {device}\r\n\r\n" + prompt})
@@ -1402,6 +1404,21 @@ async def proxy_prometheus_root(request: Request):
 @app.api_route("/api/proxy/prometheus/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
 async def proxy_prometheus(path: str, request: Request):
     return await _proxy("prometheus", path, request)
+
+class PrefixASGIWrapper:
+    def __init__(self, inner, prefix="/smp"):
+        self.inner = inner
+        self.prefix = prefix
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path.startswith(self.prefix):
+                scope["path"] = path[len(self.prefix):] or "/"
+                scope["root_path"] = self.prefix
+        await self.inner(scope, receive, send)
+
+app = PrefixASGIWrapper(app)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8081)

@@ -6,7 +6,7 @@ Modular documentation for each SageSMP component.
 
 | Module | Description |
 |--------|-------------|
-| [Core](core.md) | Protocol opcodes, node states, defaults |
+| [Core](core.md) | Protocol opcodes, node states, defaults, pure-Sage JSON codec [`smp_json.sage`] |
 | [Mailbox](mailbox.md) | FIFO message queues, handlers, ack tracking |
 | [Crypto](crypto.md) | Signing, XOR cipher, token management |
 | [Crypto/OTP](crypto/otp_crypto.md) | Pure Sage OTP encryption |

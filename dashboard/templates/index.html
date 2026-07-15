@@ -715,7 +715,17 @@ function renderTelem(name, data) {
   }
   
   if (name === 'relay') {
-    el.textContent = data && data.node_count !== undefined ? 'Connected Nodes: ' + data.node_count : 'Connected Nodes: 0';
+    let text = data && data.node_count !== undefined ? 'Connected Nodes: ' + data.node_count : 'Connected Nodes: 0';
+    if (data) {
+      const parts = [];
+      if (data.temp !== undefined) parts.push('Temp: ' + escapeHtml(data.temp) + '°C');
+      if (data.load !== undefined) parts.push('Load: ' + escapeHtml(data.load));
+      if (data.memory !== undefined) parts.push(escapeHtml(data.memory));
+      if (data.gpu_temp !== undefined) parts.push('GPU: ' + escapeHtml(data.gpu_temp) + '°C');
+      if (data.throttling !== undefined) parts.push(escapeHtml(data.throttling));
+      if (parts.length) text += ' | ' + parts.join(' | ');
+    }
+    el.textContent = text;
     return;
   }
   

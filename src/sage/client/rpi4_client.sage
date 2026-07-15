@@ -94,12 +94,15 @@ proc get_memory_info():
     return "Available: 768MB"
 
 proc get_gpu_temp():
-    let raw = read_sys_file("/sys/class/thermal/thermal_zone1/temp")
-    if raw != nil:
-        let cleaned = stripnl(raw)
-        let millideg = tonumber(cleaned)
-        if millideg != nil:
-            return "GPU: " + str(millideg / 1000.0) + "C"
+    let paths = ["/sys/class/thermal/thermal_zone1/temp", "/sys/class/thermal/thermal_zone0/temp"]
+    for i in range(len(paths)):
+        let raw = read_sys_file(paths[i])
+        if raw != nil:
+            let cleaned = stripnl(raw)
+            let millideg = tonumber(cleaned)
+            if millideg != nil:
+                return "GPU: " + str(millideg / 1000.0) + "C"
+            end
         end
     end
     return "GPU: N/A"
@@ -119,13 +122,13 @@ proc get_services_info():
     let raw = io.readfile("/tmp/sagesmp_services.json")
     if raw == nil:
         return nil
-    return json_decode(raw)
+    return smp_json.json_decode(raw)
 
 proc get_compile_info():
     let raw = io.readfile("/tmp/sagesmp_compile_result.json")
     if raw == nil:
         return nil
-    return json_decode(raw)
+    return smp_json.json_decode(raw)
 
 proc parse_mem_line(line):
     let parts = []

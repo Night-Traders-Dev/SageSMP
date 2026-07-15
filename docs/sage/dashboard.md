@@ -143,6 +143,7 @@ The dashboard manages the automated nightly cross-compilation of the core `SageL
 To keep the interface clean and concise, detailed telemetry, configuration, and logs are collapsed by default and can be expanded interactively by clicking on components:
 
 1. **Node Cards (OrangePi, RPi2, RPi4)**:
+   * The OrangePi relay card displays **Connected Nodes** count alongside its own live telemetry (CPU Temp, Load, Available RAM, GPU Temp) — matching the per-client panels. Telemetry is polled locally from `/sys/class/thermal/` and `/proc/` every 2 seconds.
    * Click to expand details such as listening IP, port configurations, active authorization types, environment setups, and full hardware specifications (CPU speed, Core Count, Architecture, Total RAM, GPU type, and Operating System details).
 2. **Active Services**:
    * Click to expand service-specific metrics such as specific DNS port listen status, FTL process PID, Grafana versions, and active exporters.

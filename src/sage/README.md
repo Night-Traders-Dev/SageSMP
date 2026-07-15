@@ -19,6 +19,7 @@ The implementation has been fully migrated from simulated mocks to real network 
 - **Do not use `import json`** — it causes an internal compiler error when compiling to ELF with `sage --compile`. A pure-Sage JSON encoder/decoder is used instead.
 - **Compiled ELF binaries (`sage --compile`) have a runtime bug with `tcp.listen()`** that returns `nil` or crashes. Always run with `sage --jit` for real TCP networking.
 - **Semicolons are not allowed** — each statement must be on its own line.
+- **`smp_json` must be imported and used as `smp_json.json_decode()`** — bare `json_decode()` calls (without module prefix) produce `Runtime Error: Undefined variable 'json_decode'`.
 - **`io.readfile()` includes trailing newlines** — use `stripnl()` before `tonumber()`.
 - **`thread.spawn(func)` with zero args causes ICE** — use `thread.spawn(func, nil)` with a dummy parameter.
 - **Avoid `chr()` inside for-loops combined with array indexing** — a Sage compiler bug corrupts scope tracking. Use simple string concatenation with precomputed values instead.
@@ -29,7 +30,8 @@ The implementation has been fully migrated from simulated mocks to real network 
 src/sage/
 ├── core/
 │   ├── __init__.sage      # Core definitions, constants, version
-│   └── smp_protocol.sage  # Protocol message types and encoding
+│   ├── smp_protocol.sage  # Protocol message types and encoding
+│   └── smp_json.sage      # Pure-Sage JSON encoder/decoder (replaces `import json`)
 ├── mailbox/
 │   └── mailbox.sage       # Mailbox system for message queuing and delivery
 ├── crypto/
@@ -96,6 +98,8 @@ OrangePi (192.168.254.44) - Relay Server (port 42000) + Dashboard (port 8081)
 
 Each client connects to the OrangePi relay every 60 seconds via TCP, sends a JSON heartbeat with system telemetry, and receives a response with cluster node count and server timestamp.
 
+The RPi4 client's `get_gpu_temp()` reads `/sys/class/thermal/thermal_zone1/temp` by default but falls back to `thermal_zone0` when no dedicated GPU thermal zone exists, ensuring compatibility across Pi 4 revisions.
+
 ### Running the Relay
 
 ```bash
@@ -137,6 +141,8 @@ The clients will:
 
 ### Protocol
 
+All JSON encoding/decoding uses `smp.core.smp_json` (imported as `smp_json`) — a pure-Sage codec that avoids the `import json` compiler ICE when compiling to ELF. The `rpi2_client.sage` and `rpi4_client.sage` clients invoke `smp_json.json_encode()` and `smp_json.json_decode()` with the module prefix.
+
 The relay sends a plain JSON response (no OTP encryption):
 
 ```json
@@ -176,6 +182,8 @@ python3 app.py
 ```
 
 The dashboard captures process output from the relay and clients via SSE.
+
+The OrangePi relay card displays both the connected node count and the relay's own live telemetry (CPU Temp, Load, Available RAM, GPU Temp) — matching the per-client panels. Telemetry is collected from OrangePi's local `/sys/class/thermal/` and `/proc/` filesystems. The dashboard also serves the relay and clients via subprocess management, automatically restarting them on crash.
 
 ### Pi-hole Ad-Blocking & Protocol Logging
 
