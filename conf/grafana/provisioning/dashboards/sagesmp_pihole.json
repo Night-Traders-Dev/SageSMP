@@ -1,0 +1,57 @@
+{
+  "title": "Pi-hole Query Stats",
+  "tags": ["sagesmp", "pihole"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "Queries Blocked (Last 24h)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "bfq8ajo0pyjggb"},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "pihole_queries_total{status=\"blocked\"}", "legendFormat": "Blocked Queries", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Queries Forwarded (Last 24h)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "bfq8ajo0pyjggb"},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+      "targets": [
+        {"expr": "pihole_queries_total{status=\"forwarded\"}", "legendFormat": "Forwarded", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Queries Blocked %",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "bfq8ajo0pyjggb"},
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "gridPos": {"h": 6, "w": 4, "x": 16, "y": 0},
+      "targets": [
+        {"expr": "pihole_blocked_percentage", "legendFormat": "Blocked %", "refId": "A"}
+      ]
+    },
+    {
+      "title": "DNS Queries (Last 60m)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "bfq8ajo0pyjggb"},
+      "targets": [
+        {"expr": "increase(pihole_queries_total[60m])", "legendFormat": "Queries", "refId": "A"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "title": "Blocked vs Forwarded (Last 60m)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "bfq8ajo0pyjggb"},
+      "targets": [
+        {"expr": "rate(pihole_queries_total{status=\"blocked\"}[60m])", "legendFormat": "Blocked", "refId": "A"},
+        {"expr": "rate(pihole_queries_total{status=\"forwarded\"}[60m])", "legendFormat": "Forwarded", "refId": "B"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    }
+  ]
+}

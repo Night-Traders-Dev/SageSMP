@@ -1,0 +1,527 @@
+{
+  "title": "SageSMP Per-Device Detail",
+  "tags": [
+    "sagesmp",
+    "devices"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "Orangepi \u2014 CPU Temp",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"orangepi\"}",
+          "legendFormat": "orangepi",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Orangepi \u2014 CPU Load",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_load{device=\"orangepi\"}",
+          "legendFormat": "orangepi",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Orangepi \u2014 Memory",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"orangepi\"}",
+          "legendFormat": "Available",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_memory_total_bytes{device=\"orangepi\"}",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Orangepi \u2014 CPU Freq",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hz"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"orangepi\"}",
+          "legendFormat": "orangepi",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi2 \u2014 CPU Temp",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"pi2\"}",
+          "legendFormat": "pi2",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi2 \u2014 CPU Load",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 4,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_load{device=\"pi2\"}",
+          "legendFormat": "pi2",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi2 \u2014 Memory",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"pi2\"}",
+          "legendFormat": "Available",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_memory_total_bytes{device=\"pi2\"}",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Pi2 \u2014 CPU Freq",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hz"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"pi2\"}",
+          "legendFormat": "pi2",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi4 \u2014 CPU Temp",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"pi4\"}",
+          "legendFormat": "pi4",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi4 \u2014 CPU Load",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 4,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_load{device=\"pi4\"}",
+          "legendFormat": "pi4",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pi4 \u2014 Memory",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 8,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"pi4\"}",
+          "legendFormat": "Available",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_memory_total_bytes{device=\"pi4\"}",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Pi4 \u2014 CPU Freq",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hz"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"pi4\"}",
+          "legendFormat": "pi4",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "GPU Temp",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "celsius"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 16,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_gpu_temp_celsius{device=\"pi4\"}",
+          "legendFormat": "GPU",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Throttling Status",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 20,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_throttling{device=\"pi4\"}",
+          "legendFormat": "Throttled",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Relay Uptime",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_relay_uptime_seconds",
+          "legendFormat": "Uptime",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Compile Count",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_compile_count",
+          "legendFormat": "Compiles",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Seconds Since Last Compile",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_seconds_since_last_compile",
+          "legendFormat": "Since last",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Relay Running",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_relay_running",
+          "legendFormat": "Relay",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  }
+}

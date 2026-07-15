@@ -1,0 +1,51 @@
+global:
+  # Resolve timeout — how long to wait before marking a firing alert as resolved
+  resolve_timeout: 5m
+  # SMTP for email notifications
+  smtp_smarthost: smtp.gmail.com:587
+  smtp_from: sagesmp@orangepi.local
+  smtp_auth_username: quegmeister@gmail.com
+  smtp_auth_identity: quegmeister@gmail.com
+  # IMPORTANT: Generate a Gmail App Password at:
+  #   https://myaccount.google.com/apppasswords
+  # Then paste it below (requires 2FA enabled on the account)
+  smtp_auth_password: "REPLACE_WITH_GMAIL_APP_PASSWORD"
+  smtp_require_tls: true
+
+route:
+  group_by: ['alertname', 'severity', 'device']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: email-critical
+  routes:
+    - receiver: email-critical
+      matchers:
+        - severity = "critical"
+      repeat_interval: 30m
+    - receiver: email-warning
+      matchers:
+        - severity = "warning"
+      repeat_interval: 6h
+
+receivers:
+  - name: email-critical
+    email_configs:
+      - to: quegmeister@gmail.com
+        send_resolved: true
+        headers:
+          subject: '[CRITICAL] {{ .GroupLabels.alertname }} — {{ .GroupLabels.device | default "cluster" }}'
+
+  - name: email-warning
+    email_configs:
+      - to: quegmeister@gmail.com
+        send_resolved: true
+        headers:
+          subject: '[WARNING] {{ .GroupLabels.alertname }} — {{ .GroupLabels.device | default "cluster" }}'
+
+inhibit_rules:
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ['alertname', 'device']

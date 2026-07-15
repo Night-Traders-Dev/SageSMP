@@ -1,0 +1,137 @@
+groups:
+  - name: sagesmp_cluster
+    interval: 30s
+    rules:
+      - alert: DeviceDown
+        expr: sagesmp_up{device=~"pi2|pi4"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.device }} is down"
+          description: "{{ $labels.device }} has been unreachable for more than 1 minute"
+
+      - alert: HighCpuTemperature
+        expr: sagesmp_cpu_temp_celsius > 75
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU temp on {{ $labels.device }}"
+          description: "{{ $labels.device }} CPU temperature is {{ $value }}°C"
+
+      - alert: CriticalCpuTemperature
+        expr: sagesmp_cpu_temp_celsius > 85
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU temp on {{ $labels.device }}"
+          description: "{{ $labels.device }} CPU temperature is {{ $value }}°C — immediate shutdown risk"
+
+      - alert: PiHoleDown
+        expr: sagesmp_pihole_active == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pi-hole is down on pi2"
+          description: "Pi-hole service is not running. DNS blocking is disabled."
+
+      - alert: PiHoleBlockingDisabled
+        expr: sagesmp_pihole_blocking == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pi-hole blocking disabled"
+          description: "Pi-hole on pi2 is running but ad-blocking is disabled"
+
+      - alert: LowMemory
+        expr: sagesmp_memory_available_bytes < 200 * 1024 * 1024
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low memory on {{ $labels.device }}"
+          description: "{{ $labels.device }} has {{ $value | humanize1024 }} available"
+
+      - alert: CriticalMemory
+        expr: sagesmp_memory_available_bytes < 100 * 1024 * 1024
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory on {{ $labels.device }}"
+          description: "{{ $labels.device }} has {{ $value | humanize1024 }} available — OOM risk"
+
+      - alert: HighCpuLoad
+        expr: sagesmp_cpu_load > 4
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load on {{ $labels.device }}"
+          description: "{{ $labels.device }} load average is {{ $value }}"
+
+      - alert: Throttled
+        expr: sagesmp_throttling{device="pi4"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pi4 is throttled"
+          description: "RPi4 CPU is throttled due to undervoltage or overheating"
+
+      - alert: PrometheusDown
+        expr: sagesmp_prometheus_active == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus is down on pi4"
+          description: "Prometheus service is not running — cluster monitoring is broken"
+
+      - alert: GrafanaDown
+        expr: sagesmp_grafana_active == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana is down on pi4"
+          description: "Grafana service is not running — dashboards unavailable"
+
+      - alert: CompileFailed
+        expr: sagesmp_last_compile_status == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cross-compile failed"
+          description: "Last cross-compile for {{ $labels.platform }} failed"
+
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter down on {{ $labels.instance }}"
+          description: "node_exporter for {{ $labels.instance }} is unreachable"
+
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs",fstype!="devtmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs",fstype!="devtmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.instance }} is {{ $value | humanize }}%"
+
+      - alert: CriticalDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs",fstype!="devtmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs",fstype!="devtmpfs"})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.instance }} is {{ $value | humanize }}% — near full"

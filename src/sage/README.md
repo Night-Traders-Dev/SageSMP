@@ -13,8 +13,9 @@ The implementation has been fully migrated from simulated mocks to real network 
 - **JSON Protocol Encoding**: Message serialization/deserialization uses custom pure-Sage JSON codec (Sage's `import json` causes a compiler ICE when compiling to ELF).
 - **60-Second Heartbeat**: Each client connects to the OrangePi relay every 60 seconds, sending system telemetry and receiving cluster status.
 
-## Important: Sage Compiler Limitations
+## Important: Sage Compiler Limitations & Version Requirements
 
+- **Requires SageLang v4.0.6+** to properly compile using AOT due to string, array, and global scope fixes introduced in that version.
 - **Do not use `import json`** — it causes an internal compiler error when compiling to ELF with `sage --compile`. A pure-Sage JSON encoder/decoder is used instead.
 - **Compiled ELF binaries (`sage --compile`) have a runtime bug with `tcp.listen()`** that returns `nil` or crashes. Always run with `sage --jit` for real TCP networking.
 - **Semicolons are not allowed** — each statement must be on its own line.

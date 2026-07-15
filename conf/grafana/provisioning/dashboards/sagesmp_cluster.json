@@ -1,0 +1,328 @@
+{
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "celsius"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"orangepi\"}",
+          "legendFormat": "OrangePi",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"pi2\"}",
+          "legendFormat": "Pi2",
+          "refId": "B"
+        },
+        {
+          "expr": "sagesmp_cpu_temp_celsius{device=\"pi4\"}",
+          "legendFormat": "Pi4",
+          "refId": "C"
+        }
+      ],
+      "title": "CPU Temperature",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_load{device=\"orangepi\"}",
+          "legendFormat": "OrangePi",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_cpu_load{device=\"pi2\"}",
+          "legendFormat": "Pi2",
+          "refId": "B"
+        },
+        {
+          "expr": "sagesmp_cpu_load{device=\"pi4\"}",
+          "legendFormat": "Pi4",
+          "refId": "C"
+        }
+      ],
+      "title": "CPU Load",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"orangepi\"}",
+          "legendFormat": "OrangePi",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"pi2\"}",
+          "legendFormat": "Pi2",
+          "refId": "B"
+        },
+        {
+          "expr": "sagesmp_memory_available_bytes{device=\"pi4\"}",
+          "legendFormat": "Pi4",
+          "refId": "C"
+        }
+      ],
+      "title": "Memory Available",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_up{device=\"pi2\"}",
+          "legendFormat": "Pi2",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_up{device=\"pi4\"}",
+          "legendFormat": "Pi4",
+          "refId": "B"
+        },
+        {
+          "expr": "sagesmp_connected_clients",
+          "legendFormat": "Connected Clients",
+          "refId": "C"
+        }
+      ],
+      "title": "Node Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_pihole_active{device=\"pi2\"}",
+          "legendFormat": "Pi-hole Active",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_pihole_blocking{device=\"pi2\"}",
+          "legendFormat": "Blocking Enabled",
+          "refId": "B"
+        }
+      ],
+      "title": "Pi-hole Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_grafana_active{device=\"pi4\"}",
+          "legendFormat": "Grafana",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_prometheus_active{device=\"pi4\"}",
+          "legendFormat": "Prometheus",
+          "refId": "B"
+        }
+      ],
+      "title": "Service Status (Pi4)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"orangepi\"}",
+          "legendFormat": "OrangePi",
+          "refId": "A"
+        },
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"pi2\"}",
+          "legendFormat": "Pi2",
+          "refId": "B"
+        },
+        {
+          "expr": "sagesmp_cpu_freq_hz{device=\"pi4\"}",
+          "legendFormat": "Pi4",
+          "refId": "C"
+        }
+      ],
+      "title": "CPU Frequency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Node CPU Usage (node_exporter)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Node Memory Usage (node_exporter)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\",fstype!=\"devtmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\",fstype!=\"devtmpfs\"})) * 100",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Node Disk Usage (node_exporter)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "bfq8ajo0pyjggb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total[$__rate_interval])",
+          "legendFormat": "{{instance}} RX",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_network_transmit_bytes_total[$__rate_interval])",
+          "legendFormat": "{{instance}} TX",
+          "refId": "B"
+        }
+      ],
+      "title": "Network Traffic (node_exporter)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "tags": [
+    "sagesmp",
+    "cluster"
+  ],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "SageSMP Cluster"
+}
