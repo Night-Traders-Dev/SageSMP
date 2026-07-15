@@ -15,7 +15,7 @@ The implementation has been fully migrated from simulated mocks to real network 
 
 ## Important: Sage Compiler Limitations & Version Requirements
 
-- **Requires SageLang v4.0.6+** to properly compile using AOT due to string, array, and global scope fixes introduced in that version.
+- **Requires SageLang v4.0.8+** to properly compile using AOT due to string, array, and global scope fixes introduced in v4.0.6, and multi-architecture JIT support added in v4.0.8.
 - **Do not use `import json`** — it causes an internal compiler error when compiling to ELF with `sage --compile`. A pure-Sage JSON encoder/decoder is used instead.
 - **Compiled ELF binaries (`sage --compile`) have a runtime bug with `tcp.listen()`** that returns `nil` or crashes. Always run with `sage --jit` for real TCP networking.
 - **Semicolons are not allowed** — each statement must be on its own line.
@@ -463,6 +463,20 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
 #### Setup
 
 * `setup-sudo` - Configure passwordless sudo on all three devices (required for `apt`, service management, and Pi-hole commands). Creates `/etc/sudoers.d/sagesmp` on each device. Optionally accepts a custom password: `setup-sudo <password>`. A standalone script is also available at `scripts/setup-sudo.sh`.
+
+## Performance Benchmarks (SageLang v4.0.8)
+
+Micro-benchmarks run on the SageSMP stack using the AST Interpreter and JIT backends (x86-64). The JIT backend uses native tail-call trampolines with profiling-guided compilation for hot functions.
+
+| Module / Operation | AST Interpreter (ops/sec) | JIT (ops/sec) |
+|--------------------|--------------------------|---------------|
+| **Mailbox (Send + Recv)** | 743 | 731 |
+| **Protocol Encode** | 33,753 | 34,532 |
+| **Protocol Decode** | 6,045 | 6,225 |
+| **Crypto (Encrypt + Decrypt)** | 2,531 | 2,583 |
+| **Transport Buffer Writes** | 6,354 | 6,333 |
+
+*Run with: `sage -I src src/sage/demo/benchmark.sage` (AST) or `sage -I src --jit src/sage/demo/benchmark.sage` (JIT). GC disabled during benchmarks. Benchmarks cover 10K-20K iterations per operation.*
 
 ## License
 

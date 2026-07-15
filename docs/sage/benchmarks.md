@@ -16,22 +16,32 @@ The benchmarks are located in `src/sage/demo/benchmark.sage` and cover:
 
 ## Running the Benchmarks
 
-To run the benchmark suite, execute the following command:
-
 ```bash
+# AST Interpreter (default)
 sage -I src src/sage/demo/benchmark.sage
+
+# JIT (profiling-guided native compilation)
+sage -I src --jit src/sage/demo/benchmark.sage
 ```
 
 ---
 
-## Baseline Performance Results
+## Performance Results (SageLang v4.0.8)
 
-Below are the baseline metrics compiled and run on the current environment:
+### AST Interpreter vs JIT Comparison
 
-| Module / Operation | Throughput (ops/sec) | Description |
-|--------------------|----------------------|-------------|
-| **Mailbox (Send + Recv)** | ~645 ops/sec | Enqueueing and dequeueing FIFO messages |
-| **Protocol Encode** | ~5,928 ops/sec | JSON serialization of protocol envelopes |
-| **Protocol Decode** | ~3,723 ops/sec | JSON parsing and dictionary validation |
-| **Crypto (Encrypt + Decrypt)** | ~2,417 ops/sec | Base64-safe XOR encryption roundtrips |
-| **Transport Buffer Writes** | ~6,331 ops/sec | Micro-writes to connection framing buffers |
+| Module / Operation | AST Interpreter (ops/sec) | JIT (ops/sec) | Δ |
+|--------------------|--------------------------|---------------|---|
+| **Mailbox (Send + Recv)** | 743 | 731 | -1.6% |
+| **Protocol Encode** | 33,753 | 34,532 | +2.3% |
+| **Protocol Decode** | 6,045 | 6,225 | +3.0% |
+| **Crypto (Encrypt + Decrypt)** | 2,531 | 2,583 | +2.1% |
+| **Transport Buffer Writes** | 6,354 | 6,333 | -0.3% |
+
+### Notes
+
+- GC is disabled during benchmarks (`gc_disable()`) to isolate pure computational throughput.
+- The JIT backend generates native tail-call trampolines for hot functions (≥100 calls), bypassing the AST tree-walker for profiled code paths.
+- JIT now supports x86-64, AArch64, and RV64 architectures (v4.0.8+).
+- Mailbox throughput is I/O-bound (array resizing), so JIT/AST performance is nearly identical for that workload.
+- Protocol encode/decode and crypto show consistent 2-3% improvements under JIT due to reduced dispatch overhead in hot inner loops.
