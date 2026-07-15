@@ -466,3 +466,51 @@ A modern, glassmorphic real-time dashboard is available to monitor and manage th
 ## License
 
 MIT
+
+## SSH ProxyJump Configuration
+
+To connect directly to the Pi2 and Pi4 from your host machine (bypassing the need to SSH into OrangePi first), add the following to your host's `~/.ssh/config` file:
+
+```ssh-config
+Host OrangePi
+    HostName 192.168.254.44
+    User kraken
+
+Host pi2
+    HostName 10.42.1.109
+    User pi
+    ProxyJump OrangePi
+
+Host pi4
+    HostName 10.42.0.141
+    User ubuntu
+    ProxyJump OrangePi
+```
+
+This allows you to simply run `ssh pi2` or `ssh pi4` directly from your host.
+
+## AOT and Cross-Compilation
+
+SageLang's AOT (Ahead-of-Time) compiler and JIT-guided AOT workflows are fully supported. SageSMP provides a single unified binary (`sagesmp.sage`) containing all components (Relay, Pi2 client, Pi4 client, Shell). 
+
+You can cross-compile the SageSMP unified binary for multiple architectures using the AOT compiler and cross-platform GCC:
+
+```bash
+# 1. Generate C code from SageSMP via AOT
+sage --aot src/sage/sagesmp.sage > sagesmp.c
+
+# 2. Compile for target architectures
+# x86_64
+gcc -std=c11 -O2 sagesmp.c -o sagesmp-x86_64 -lm
+
+# ARM64 (Raspberry Pi 4, etc.)
+aarch64-linux-gnu-gcc -std=c11 -O2 sagesmp.c -o sagesmp-aarch64 -lm
+
+# RISC-V 64 (OrangePi, etc.)
+riscv64-linux-gnu-gcc -std=c11 -O2 sagesmp.c -o sagesmp-rv64 -lm
+```
+
+You can also use Profile-Guided AOT Compilation using the JIT:
+```bash
+sage --aot --jit src/sage/sagesmp.sage -o sagesmp_optimized
+```
