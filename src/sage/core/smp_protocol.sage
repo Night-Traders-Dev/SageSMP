@@ -4,7 +4,7 @@
 
 gc_disable()
 
-import json
+import smp.core.smp_json as smp_json
 
 let SMP_OP_HEARTBEAT = 0
 let SMP_OP_MESSAGE = 1
@@ -86,17 +86,14 @@ proc encode(msg):
         msg["timestamp"] = msg["ts"]
     end
     
-    let root = json.cJSON_FromSage(msg)
-    let encoded = json.cJSON_PrintUnformatted(root)
-    return encoded
+    return smp_json.json_encode(msg)
 
 # Decode encoded message string back to dict
 proc decode(encoded):
-    let root = json.cJSON_Parse(encoded)
-    if root == nil:
+    let msg = smp_json.json_decode(encoded)
+    if msg == nil:
         return nil
     end
-    let msg = json.cJSON_ToSage(root)
     # Ensure both "ts" and "timestamp" keys are set
     if dict_has(msg, "ts"):
         msg["timestamp"] = msg["ts"]

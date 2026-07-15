@@ -31,6 +31,7 @@ Modular documentation for each SageSMP component.
 ## Building
 
 ```bash
+./sagemake --sagesmp # Build unified single binary launcher
 ./sagemake --relay  # Build relay server
 ./sagemake --client # Build client shell  
 ./sagemake --demo   # Build demo

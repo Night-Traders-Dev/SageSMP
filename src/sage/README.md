@@ -97,24 +97,36 @@ Each client connects to the OrangePi relay every 60 seconds via TCP, sends a JSO
 
 ### Running the Relay
 
-**Always use `sage --jit`** for real TCP networking:
-
 ```bash
-# On OrangePi
-stdbuf -oL sage --jit src/sage/server/orangepi_relay.sage
+# On OrangePi (Default port 42000)
+./bin/sagesmp relay
 
 # Or with custom port
-SMP_PORT=42001 stdbuf -oL sage --jit src/sage/server/orangepi_relay.sage
+./bin/sagesmp relay 42001
 ```
 
 ### Running the Clients
 
+The client telemetry scripts can connect to any IP/Port dynamically:
+
 ```bash
 # On RPi2/PeachPi
-SMP_HOST="192.168.254.44" stdbuf -oL sage --jit src/sage/client/rpi2_client.sage
+./bin/sagesmp pi2 <Relay IP> <Relay Port>
 
 # On RPi4
-SMP_HOST="192.168.254.44" stdbuf -oL sage --jit src/sage/client/rpi4_client.sage
+./bin/sagesmp pi4 <Relay IP> <Relay Port>
+```
+
+### Running the Universal Interactive Shell
+
+The universal client shell allows you to join the cluster interactively from any machine:
+
+```bash
+# Connect as a client
+./bin/sagesmp shell --host 192.168.254.44 --port 42000
+
+# Spin up a local mock router
+./bin/sagesmp shell --router --host 127.0.0.1 --port 42000
 ```
 
 The clients will:
@@ -136,21 +148,20 @@ The relay sends a plain JSON response (no OTP encryption):
 
 ### Deploying Updates
 
-The `sagemake` build script compiles all three targets:
+The `sagemake` build script compiles all targets and creates a unified single binary launcher:
 
 ```bash
-./sagemake --all
+./sagemake --sagesmp
 ```
 
-For quick deployment to devices:
+For quick deployment to devices, you can simply transfer the `bin/sagesmp` script and the unified `src/sage/sagesmp.sage` file:
 
 ```bash
 # Copy to OrangePi
-rsync -av src/sage/server/orangepi_relay.sage src/sage/client/ OrangePi:~/SageSMP/src/sage/
+rsync -av bin/sagesmp src/sage/sagesmp.sage OrangePi:~/SageSMP/bin/
 
-# Then from OrangePi to pi2/pi4
-ssh OrangePi "cat ~/SageSMP/src/sage/client/rpi2_client.sage | ssh evelyn@10.42.1.109 'cat > ~/SageSMP/src/sage/client/rpi2_client.sage'"
-ssh OrangePi "cat ~/SageSMP/src/sage/client/rpi4_client.sage | ssh ubuntu@10.42.0.141 'cat > ~/SageSMP/src/sage/client/rpi4_client.sage'"
+# Execute on remote instances as needed
+ssh OrangePi "./bin/sagesmp relay 42000"
 ```
 
 ### Dashboard

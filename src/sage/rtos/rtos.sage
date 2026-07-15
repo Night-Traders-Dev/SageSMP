@@ -203,19 +203,19 @@ proc rtos_halt():
 # ============================================================================
 
 proc rtos_queue_create():
-    return []
+    return {"items": []}
 
 proc rtos_queue_send(q, item):
-    push(q, item)
+    push(q["items"], item)
 
 proc rtos_queue_recv(q):
-    if len(q) == 0:
+    if len(q["items"]) == 0:
         return nil
-    let item = q[0]
+    let item = q["items"][0]
     let new_q = []
-    for i in range(len(q) - 1):
-        push(new_q, q[i + 1])
-    q = new_q
+    for i in range(len(q["items"]) - 1):
+        push(new_q, q["items"][i + 1])
+    q["items"] = new_q
     return item
 
 # ============================================================================

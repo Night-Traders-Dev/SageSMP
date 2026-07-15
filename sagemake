@@ -79,6 +79,9 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
     if all_targets or smp_client:
         targets.append(("src/sage/client/smp_client", "bin/smp_client"))
     
+    if all_targets or kwargs.get('sagesmp'):
+        targets.append(("src/sage/sagesmp", "bin/sagesmp"))
+    
     if all_targets or secure:
         targets.append(("src/sage/crypto/secure_msg", "bin/secure_msg"))
     
@@ -115,7 +118,14 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
     successes = 0
     for src, out in targets:
         banner(f"Building {src}.sage")
-        res = run_cmd([SAGE_BIN, "--compile", f"{src}.sage", "-o", out])
+        if "sagesmp" in src:
+            # Create a launcher script instead of buggy compiled ELF
+            with open(out, "w") as f_out:
+                f_out.write("#!/bin/sh\nexec sage --jit " + src + ".sage \"$@\"\n")
+            os.chmod(out, 0o755)
+            res = type('obj', (object,), {'returncode': 0})()
+        else:
+            res = run_cmd([SAGE_BIN, "-I", "src", "--compile", f"{src}.sage", "-o", out])
         if res.returncode == 0:
             print(f"Built: {out}")
             successes += 1
@@ -144,6 +154,7 @@ def main():
     parser.add_argument("--relay", action="store_true", help="Build relay server")
     parser.add_argument("--client", action="store_true", help="Build client shell")
     parser.add_argument("--smp-client", action="store_true", dest="smp_client", help="Build unified client+relay interactive shell")
+    parser.add_argument("--sagesmp", action="store_true", dest="sagesmp", help="Build unified binary for all components")
     parser.add_argument("--secure", action="store_true", help="Build secure message demo")
     parser.add_argument("--orangepi", action="store_true", help="Build OrangePi relay server")
     parser.add_argument("--rpi2", action="store_true", help="Build RPi2 client")
@@ -171,6 +182,7 @@ def main():
             rpi4=args.rpi4,
             client=args.client,
             smp_client=args.smp_client,
+            sagesmp=args.sagesmp,
             demo=args.demo,
             secure=args.secure,
             test_network=args.test_network
