@@ -12,7 +12,7 @@ Instead of shipping multiple scripts, all logic has been combined into `src/sage
 
 ## AOT Compilation
 
-SageLang supports AOT (Ahead-of-Time) compilation. We've enhanced the AOT compiler to correctly emit C-code equivalents for all global scoped variables and built-in standard library functions, allowing seamless compilation.
+SageLang supports AOT (Ahead-of-Time) compilation. We've enhanced the AOT compiler (starting in SageLang **v4.0.6**) to correctly emit C-code equivalents for all global scoped variables and built-in standard library functions, allowing seamless compilation.
 
 ### Cross-Compilation for Multiple Architectures
 
