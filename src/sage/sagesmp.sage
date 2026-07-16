@@ -2,8 +2,7 @@ import sys
 import tcp
 import thread
 import io
-import rich.style
-import rich.color
+import rich
 
 proc substring(s, start, length):
     let res = ""
