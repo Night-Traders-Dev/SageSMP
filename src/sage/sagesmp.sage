@@ -208,12 +208,27 @@ proc handle_client(client_fd):
         return
     end
 
+    let op = msg["op"]
+    if op == "list":
+        thread.lock(clients_mutex)
+        let ids = dict_keys(clients)
+        let devs = []
+        for i in range(len(ids)):
+            push(devs, clients[ids[i]])
+        thread.unlock(clients_mutex)
+        let resp = "{\"status\":\"ok\",\"op\":\"list\",\"devices\":" + json_encode(devs) + ",\"server_ts\":" + str(clock()) + "}"
+        tcp.sendall(client_fd, resp)
+        tcp.recv(client_fd, 1)
+        tcp.close(client_fd)
+        return
+    end
+
     let cid = msg["client_id"]
     let platform = msg["platform"]
     let info_str = msg["info"]
 
     thread.lock(clients_mutex)
-    clients[str(cid)] = {"id": cid, "platform": platform, "info": info_str, "last_seen": clock()}
+    clients[str(cid)] = {"id": cid, "platform": platform, "info": info_str, "services": msg["services"], "compile": msg["compile"], "last_seen": clock()}
     let count = len(dict_keys(clients))
     thread.unlock(clients_mutex)
 
@@ -313,8 +328,24 @@ proc run_connect(mode_idx):
         port = tonumber(port_env)
     end
 
-    print("=== SMP Connect (Real TCP) ===")
-    print("Connecting to " + host + ":" + str(port) + " ...")
+    let ok = cmd_connect(host, port)
+    if ok:
+        # Drop straight into the interactive shell with the live relay session.
+        run_client_shell()
+    end
+end
+
+
+# =========================================
+# Query connected devices from an SMP relay (real TCP)
+# =========================================
+# Mirrors the dashboard's device-management visibility: opens a real TCP
+# connection and asks the relay for the list of currently connected devices.
+# The relay returns each device's id, platform, info, services, and last_seen.
+
+proc run_devices_query(host, port):
+    print("=== SMP Devices (Real TCP) ===")
+    print("Querying " + host + ":" + str(port) + " ...")
 
     let fd = tcp.connect(host, port)
     if fd == -1:
@@ -323,9 +354,10 @@ proc run_connect(mode_idx):
     end
 
     let msg = {
+        "op": "list",
         "client_id": 0,
         "platform": "SageSMP",
-        "info": "standalone connect",
+        "info": "device query",
         "timestamp": clock()
     }
     tcp.sendall(fd, json_encode(msg))
@@ -333,16 +365,31 @@ proc run_connect(mode_idx):
     let raw = tcp.recv(fd, 4096)
     if raw != nil and len(raw) > 0:
         let resp = json_decode(raw)
-        if resp != nil:
-            print("[OK] Connected to SMP server at " + host + ":" + str(port))
+        if resp != nil and resp["devices"] != nil:
+            let devs = resp["devices"]
+            print("[OK] " + str(len(devs)) + " device(s) connected to " + host + ":" + str(port))
+            if len(devs) == 0:
+                print("  (no devices registered)")
+            else:
+                print("")
+                print("  idx  id   platform   last_seen        info")
+                print("  ───  ───  ─────────  ───────────────  ───────────────────────────────")
+                for i in range(len(devs)):
+                    let d = devs[i]
+                    let id_s = str(d["id"])
+                    let plat = str(d["platform"])
+                    let ls = str(d["last_seen"])
+                    let info = ""
+                    if d["info"] != nil:
+                        info = str(d["info"])
+                    end
+                    print("  " + str(i) + "    " + id_s + "   " + plat + "   " + ls + "   " + info)
+                end
+            end
+        elif resp != nil:
+            print("[OK] Connected, but no device list returned.")
             if resp["status"] != nil:
-                print("  status     : " + str(resp["status"]))
-            end
-            if resp["node_count"] != nil:
-                print("  node_count : " + str(resp["node_count"]))
-            end
-            if resp["server_ts"] != nil:
-                print("  server_ts  : " + str(resp["server_ts"]))
+                print("  status: " + str(resp["status"]))
             end
         else:
             print("[WARN] Bad JSON response: " + raw)
@@ -351,9 +398,32 @@ proc run_connect(mode_idx):
         print("[WARN] No response from " + host + ":" + str(port))
     end
 
-    # Shift TIME_WAIT to us: server waits for client to close first.
     tcp.close(fd)
     print("[DONE] Disconnected.")
+end
+
+
+proc run_devices_query_mode(mode_idx):
+    let argv = sys.args()
+    let host = "127.0.0.1"
+    let port = 42000
+    if len(argv) >= mode_idx + 3:
+        host = argv[mode_idx + 1]
+        port = tonumber(argv[mode_idx + 2])
+    end
+    let env_h = sys.getenv("SMP_HOST")
+    if env_h != nil:
+        host = env_h
+    end
+    let env_p = sys.getenv("SMP_PORT")
+    if env_p != nil:
+        port = tonumber(env_p)
+    end
+    if port == nil or port < 1 or port > 65535:
+        print("Error: port must be 1-65535")
+        return
+    end
+    run_devices_query(host, port)
 end
 
 
@@ -1392,7 +1462,8 @@ let session = {
     "inbox":       [],
     "outbox":      [],
     "msg_log":     [],
-    "seq":         0
+    "seq":         0,
+    "live_fd":     0
 }
 
 # ============================================================================
@@ -1404,29 +1475,44 @@ proc cmd_connect(host, port):
         print("[SMP] Already connected to " + session["router_host"] + ":" +
               str(session["router_port"]) + "  (disconnect first)")
         return false
+    end
 
-    # Enqueue a JOIN into the router's connection queue — the accept_task
-    # will pick it up on its next tick and call router_register().
-    # For the client prompt to show the assigned ID immediately, we also
-    # assign it locally (mirrors what the router ASSIGN response would carry).
-    let assigned_id = router_state["next_id"]
-    let join_req = {
-        "op":   SMP_OP_JOIN,
-        "host": host,
-        "port": port,
-        "name": session["my_name"]
+    # Open a real TCP connection to the SMP relay and perform a heartbeat
+    # handshake so we can drop straight into the interactive shell.
+    print("[SMP] Connecting to " + host + ":" + str(port) + " ...")
+    let fd = tcp.connect(host, port)
+    if fd == -1:
+        print("[SMP] Connection failed to " + host + ":" + str(port))
+        return false
+    end
+
+    let hb = {
+        "client_id": 0,
+        "platform": "SageSMP",
+        "info": "interactive client",
+        "timestamp": clock()
     }
-    push(router_conn_queue, join_req)
-    print("[SMP] JOIN queued for router at " + host + ":" + str(port))
-    print("[SMP] Awaiting ASSIGN... (accept_task will process on next tick)")
+    tcp.sendall(fd, json_encode(hb))
+    let raw = tcp.recv(fd, 4096)
+    let node_count = 0
+    if raw != nil and len(raw) > 0:
+        let resp = json_decode(raw)
+        if resp != nil and resp["node_count"] != nil:
+            node_count = tonumber(resp["node_count"])
+        end
+    end
+    # Relay waits for the client to close first; for an interactive session we
+    # keep our side open, so close this handshake socket and reconnect lazily.
+    tcp.close(fd)
 
-    # Update session — ID will be confirmed when accept_task processes the JOIN
     session["router_host"] = host
     session["router_port"] = port
     session["connected"]   = true
-    session["my_id"]       = assigned_id
-    print("[SMP] Assigned node ID: " + str(assigned_id) +
-          "  (pending router confirmation)")
+    session["my_id"]       = node_count + 1
+    session["live_fd"]     = 0
+    print("[SMP] Connected to relay at " + host + ":" + str(port) +
+          "  (cluster node_count=" + str(node_count) + ")")
+    print("[SMP] Entering interactive shell. Type 'help' for commands, 'disconnect' to leave.")
     return true
 
 proc cmd_disconnect():
@@ -1434,14 +1520,15 @@ proc cmd_disconnect():
         print("[SMP] Not connected.")
         return false
     let old_id = session["my_id"]
-    # Enqueue a LEAVE — accept_task will process it
-    let leave_req = {"op": SMP_OP_LEAVE, "node_id": old_id}
-    push(router_conn_queue, leave_req)
+    if session["live_fd"] != 0 and session["live_fd"] != -1:
+        tcp.close(session["live_fd"])
+    end
     session["connected"]   = false
     session["my_id"]       = 0
     session["router_host"] = ""
     session["router_port"] = 0
-    print("[SMP] LEAVE queued. Node ID " + str(old_id) + " released.")
+    session["live_fd"]     = 0
+    print("[SMP] Disconnected from relay. Node ID " + str(old_id) + " released.")
     return true
 
 # ============================================================================
@@ -1735,6 +1822,7 @@ proc cmd_help():
     print("  ─────────────────────────────────────────────────────────────────")
     print("  CONNECTION  (node IDs assigned by router on connect)")
     print("    connect <host> <port>          Connect to an SMP router")
+    print("    devices [<host> <port>]        List devices connected to an SMP relay")
     print("    disconnect                     Disconnect and release node ID")
     print("")
     print("  MESSAGING  (crypto applied automatically, routed via router)")
@@ -1785,6 +1873,31 @@ proc dispatch(parts):
             print("Usage: connect <host> <port>")
             return
         cmd_connect(parts[1], tonumber(parts[2]))
+
+    elif cmd == "devices":
+        # List devices connected to an SMP relay (real TCP).
+        # Usage: devices [<host> <port>]
+        let dhost = session["router_host"]
+        let dport = session["router_port"]
+        if len(parts) >= 3:
+            dhost = parts[1]
+            dport = tonumber(parts[2])
+        end
+        let env_h = sys.getenv("SMP_HOST")
+        if env_h != nil:
+            dhost = env_h
+        end
+        let env_p = sys.getenv("SMP_PORT")
+        if env_p != nil:
+            dport = tonumber(env_p)
+        end
+        if dhost == "" or dhost == nil:
+            dhost = DEFAULT_HOST
+        end
+        if dport == 0 or dport == nil:
+            dport = DEFAULT_PORT
+        end
+        run_devices_query(dhost, dport)
 
     elif cmd == "disconnect":
         cmd_disconnect()
@@ -2131,6 +2244,12 @@ proc run_client_shell():
     print("  Type 'help' for available commands.")
     print("")
 
+    if session["connected"]:
+        print("  [LIVE] Connected to relay " + session["router_host"] + ":" +
+              str(session["router_port"]) + "  (use 'devices' to list connected nodes)")
+        print("")
+    end
+
     # Initialize RTOS for local simulation (so accept_task processes JOINs)
     rtos_init()
     rtos_task_create(TASK_ACCEPT,    7, 1)
@@ -2145,9 +2264,12 @@ proc run_client_shell():
         rtos_tick_once()
         _poll_router_mailbox()
         let id_label = ""
-        if session["my_id"] != 0:
+        if session["connected"]:
+            id_label = "[relay " + session["router_host"] + ":" + str(session["router_port"]) + "] "
+        elif session["my_id"] != 0:
             id_label = "[node-" + str(session["my_id"]) + "] "
-        let line = input("smp-tick=" + str(rtos_tick - 1) + " " + id_label + "> ")
+        end
+        let line = input("smp " + id_label + "> ")
         if line == nil or len(str(line)) == 0:
             let skip = true
         else:
@@ -2182,8 +2304,9 @@ proc main():
     end
     
     if mode_idx == -1:
-        print("Usage: sagesmp <relay|pi2|pi4|shell|connect> [args...]")
+        print("Usage: sagesmp <relay|pi2|pi4|shell|connect|devices> [args...]")
         print("  sagesmp connect <host> <port>   Connect to an SMP relay server")
+        print("  sagesmp devices <host> <port>   List devices on an SMP relay server")
         return
     end
     
@@ -2197,6 +2320,8 @@ proc main():
         run_rpi4(mode_idx)
     elif mode == "connect":
         run_connect(mode_idx)
+    elif mode == "devices":
+        run_devices_query_mode(mode_idx)
     elif mode == "shell":
         parse_args(mode_idx)
         if _start_as_router:

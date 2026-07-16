@@ -261,6 +261,38 @@ The clients will:
 2. Print `[HEARTBEAT OK]` with node count and server timestamp
 3. Sleep for 60 seconds, then repeat
 
+### Connecting and Managing Devices
+
+`connect` opens a **real TCP connection** to an SMP relay and then drops you
+straight into the interactive shell, so you can manage the devices connected to
+that relay:
+
+```bash
+# Connect to the OrangePi relay, then enter the shell
+./bin/sagesmp connect 192.168.254.44 42000
+```
+
+Once in the shell, the device-management commands are available (they query the
+relay over real TCP):
+
+| Command | Description |
+|---------|-------------|
+| `devices [<host> <port>]` | List every device currently connected to the relay (id, platform, last-seen, telemetry) |
+| `status` | Show the live session state (relay host/port, your node ID) |
+| `disconnect` | Close the relay connection and leave the shell |
+| `connect <host> <port>` | Connect to a relay from inside the shell |
+
+`devices` and `status` also work as one-shot top-level modes:
+
+```bash
+# One-shot: list connected devices without entering the shell
+./bin/sagesmp devices 192.168.254.44 42000
+```
+
+Host/port can be overridden with the `SMP_HOST` / `SMP_PORT` environment
+variables. The relay reports connected devices via a new `op:"list"` request
+(returns each device's `id`, `platform`, `info`, `services`, and `last_seen`).
+
 ### Protocol
 
 All JSON encoding/decoding uses `smp.core.smp_json` (imported as `smp_json`) — a pure-Sage codec that avoids the `import json` compiler ICE when compiling to ELF. The `rpi2_client.sage` and `rpi4_client.sage` clients invoke `smp_json.json_encode()` and `smp_json.json_decode()` with the module prefix.

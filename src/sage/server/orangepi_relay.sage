@@ -29,12 +29,33 @@ proc handle_client(client_fd):
         return
     end
 
+    let op = msg["op"]
+    if op == "list":
+        # Device-management query: return the list of connected devices.
+        thread.lock(clients_mutex)
+        let ids = dict_keys(clients)
+        let devs = []
+        for i in range(len(ids)):
+            push(devs, clients[ids[i]])
+        thread.unlock(clients_mutex)
+        let body = "\"devices\":" + smp_json.json_encode(devs)
+        let resp = "{\"status\":\"ok\",\"op\":\"list\"," + body + ",\"server_ts\":" + str(clock()) + "}"
+        tcp.sendall(client_fd, resp)
+        tcp.recv(client_fd, 1)
+        tcp.close(client_fd)
+        return
+    end
+
     let cid = msg["client_id"]
     let platform = msg["platform"]
     let info_str = msg["info"]
 
     thread.lock(clients_mutex)
-    clients[str(cid)] = {"id": cid, "platform": platform, "info": info_str, "last_seen": clock()}
+    clients[str(cid)] = {
+        "id": cid, "platform": platform, "info": info_str,
+        "services": msg["services"], "compile": msg["compile"],
+        "last_seen": clock()
+    }
     let count = len(dict_keys(clients))
     thread.unlock(clients_mutex)
 

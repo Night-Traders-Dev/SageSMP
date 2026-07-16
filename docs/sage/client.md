@@ -125,3 +125,39 @@ let seq = send(client, 2, {"data": "Hello"})
 # Run event loop
 run(client)
 ```
+
+---
+
+## Standalone Interactive Shell (`sagesmp`)
+
+The unified `sagesmp` binary includes an interactive client shell for managing
+devices connected to an SMP relay. A successful `connect` drops you straight into
+this shell.
+
+### Connect and Manage Devices
+
+```bash
+# Connect to a relay and enter the shell
+./bin/sagesmp connect 192.168.254.44 42000
+
+# One-shot: list connected devices without entering the shell
+./bin/sagesmp devices 192.168.254.44 42000
+```
+
+### Shell Commands
+
+| Command | Description |
+|---------|-------------|
+| `connect <host> <port>` | Open a real TCP connection to an SMP relay and switch to live mode |
+| `devices [<host> <port>]` | List every device registered on the relay (id, platform, last-seen, telemetry) |
+| `status` | Show live session state (relay host/port, your node ID) |
+| `disconnect` | Close the relay connection and leave the shell |
+| `send` / `broadcast` / `recv` | (Simulated) OTP-encrypted messaging against the in-process router |
+| `relay on/off` / `relay add ...` | Configure auto-relay rules for incoming messages |
+| `set secret/otp_pass/otp_seed` | Configure the OTP crypto used for simulated messaging |
+| `help` / `quit` | Show command list / exit |
+
+`devices` and `status` open their own real TCP connection to the relay (using
+`SMP_HOST` / `SMP_PORT` if set) and are the standalone client's equivalent of the
+dashboard's device-visibility features, implemented over the SMP relay protocol
+rather than SSH.
