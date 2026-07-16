@@ -2,6 +2,8 @@ import sys
 import tcp
 import thread
 import io
+import rich.style
+import rich.color
 
 proc substring(s, start, length):
     let res = ""
@@ -1044,6 +1046,63 @@ end
 # ============================================================================
 
 let SMP_VERSION      = "1.0.0"
+
+# ANSI escape helpers for styled shell prompt
+let _ESC = chr(27)
+let _RESET = _ESC + "[0m"
+let _BOLD = _ESC + "[1m"
+
+# Build a styled prompt string using rich ANSI codes
+proc smp_styled(text, style_str):
+    return rich.style.render_styled(text, rich.style.parse_style(style_str))
+
+# Build the SageSMP fancy prompt with a gradient effect
+proc smp_prompt(context_label):
+    let chars = ["S", "a", "g", "e", "S", "M", "P"]
+    let colors = ["bright_cyan", "cyan", "bright_blue", "blue", "bright_magenta", "magenta", "bright_red"]
+    let logo = ""
+    for i in range(len(chars)):
+        logo = logo + smp_styled(chars[i], "bold " + colors[i])
+    let arrow = smp_styled(" \xe2\x86\x92 ", "bold bright_yellow")
+    let ctx = ""
+    if context_label != nil and len(context_label) > 0:
+        ctx = smp_styled("[" + context_label + "]", "dim bright_white") + " "
+    end
+    let chevron = smp_styled("\xe2\x9d\xaf ", "bold green")
+    return logo + arrow + ctx + chevron
+
+# Build styled banner box for shell startup
+proc smp_banner(title, subtitle):
+    let bar_color    = "bold bright_cyan"
+    let title_color  = "bold bright_white"
+    let sub_color    = "dim bright_white"
+    let accent_color = "bold bright_magenta"
+
+    let top    = smp_styled("  \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae", bar_color)
+    let mid_l  = smp_styled("  \xe2\x94\x82", bar_color)
+    let mid_r  = smp_styled("\xe2\x94\x82", bar_color)
+    let bottom = smp_styled("  \xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf", bar_color)
+
+    let chars = ["S", "a", "g", "e", "S", "M", "P"]
+    let colors = ["bright_cyan", "cyan", "bright_blue", "blue", "bright_magenta", "magenta", "bright_red"]
+    let gradient_logo = ""
+    for i in range(len(chars)):
+        gradient_logo = gradient_logo + smp_styled(chars[i], "bold " + colors[i])
+    let sage_logo = gradient_logo
+    let ver = smp_styled("v" + SMP_VERSION, accent_color)
+    let title_line = sage_logo + " " + ver + "  " + smp_styled(title, title_color)
+    let sub_line = smp_styled(subtitle, sub_color)
+
+    # Pad title and subtitle to fill the box
+    let pad_title = "                                                "
+    let pad_sub = "                                                "
+
+    print("")
+    print(top)
+    print(mid_l + "  " + title_line + mid_r)
+    print(mid_l + "  " + sub_line + mid_r)
+    print(bottom)
+    print("")
 let SMP_OP_HEARTBEAT = 0
 let SMP_OP_MESSAGE   = 1
 let SMP_OP_JOIN      = 2
@@ -2184,13 +2243,8 @@ proc parse_args(mode_idx):
 # ============================================================================
 
 proc run_router_shell():
-    print("")
-    print("  ╔══════════════════════════════════════════════╗")
-    print("  ║       SMP Router  v" + SMP_VERSION + "                  ║")
-    print("  ║  RTOS-scheduled routing + auto registration  ║")
-    print("  ╚══════════════════════════════════════════════╝")
-    print("")
-    print("  Listening on " + router_state["host"] + ":" + str(router_state["port"]))
+    smp_banner("Router", "RTOS-scheduled routing + auto registration")
+    print("  " + smp_styled("Listening on ", "dim") + smp_styled(router_state["host"] + ":" + str(router_state["port"]), "bold bright_green"))
     print("")
 
     router_state["enabled"] = true
@@ -2207,9 +2261,9 @@ proc run_router_shell():
     rtos_task_create(TASK_HEARTBEAT, 2, 10)
 
     print("")
-    print("  RTOS tasks registered. The scheduler runs one tick before each")
-    print("  prompt, automatically accepting clients and routing messages.")
-    print("  Type 'help' for available commands.")
+    print("  " + smp_styled("\xe2\x9a\x99", "bright_yellow") + smp_styled("  RTOS tasks registered. The scheduler runs one tick before each", "dim"))
+    print(smp_styled("  prompt, automatically accepting clients and routing messages.", "dim"))
+    print("  " + smp_styled("\xe2\x9c\xa6", "bright_cyan") + "  Type " + smp_styled("'help'", "bold bright_white") + " for available commands.")
     print("")
 
     let running = true
@@ -2217,7 +2271,7 @@ proc run_router_shell():
         # Run one scheduler tick before reading input
         rtos_tick_once()
 
-        let line = input("router[tick=" + str(rtos_tick) + "]> ")
+        let line = input(smp_prompt("router:tick=" + str(rtos_tick)))
         if line == nil or len(str(line)) == 0:
             let skip = true
         else:
@@ -2232,21 +2286,16 @@ proc run_router_shell():
                     running = false
 
 proc run_client_shell():
-    print("")
-    print("  ╔══════════════════════════════════════════════╗")
-    print("  ║       SMP Client  v" + SMP_VERSION + "                  ║")
-    print("  ║   OTP-encrypted messaging + auto-relay       ║")
-    print("  ╚══════════════════════════════════════════════╝")
-    print("")
+    smp_banner("Client", "OTP-encrypted messaging + auto-relay")
     if router_state["port"] != 0:
-        print("  Default router port : " + str(router_state["port"]))
+        print("  " + smp_styled("Default router port : ", "dim") + smp_styled(str(router_state["port"]), "bold bright_green"))
     end
-    print("  Type 'help' for available commands.")
+    print("  " + smp_styled("\xe2\x9c\xa6", "bright_cyan") + "  Type " + smp_styled("'help'", "bold bright_white") + " for available commands.")
     print("")
 
     if session["connected"]:
-        print("  [LIVE] Connected to relay " + session["router_host"] + ":" +
-              str(session["router_port"]) + "  (use 'devices' to list connected nodes)")
+        print("  " + smp_styled("\xe2\x9a\xa1 LIVE", "bold bright_green") + smp_styled(" Connected to relay ", "dim") + smp_styled(session["router_host"] + ":" +
+              str(session["router_port"]), "bold bright_cyan") + smp_styled("  (use 'devices' to list connected nodes)", "dim"))
         print("")
     end
 
@@ -2255,7 +2304,7 @@ proc run_client_shell():
     rtos_task_create(TASK_ACCEPT,    7, 1)
     rtos_task_create(TASK_MESSAGE,   5, 2)
     rtos_task_create(TASK_HEARTBEAT, 2, 10)
-    print("  [RTOS] Local router tasks initialized for simulation.")
+    print("  " + smp_styled("\xe2\x9a\x99", "bright_yellow") + smp_styled("  RTOS local router tasks initialized for simulation.", "dim"))
     print("")
 
     let running = true
@@ -2269,7 +2318,7 @@ proc run_client_shell():
         elif session["my_id"] != 0:
             id_label = "[node-" + str(session["my_id"]) + "] "
         end
-        let line = input("smp " + id_label + "> ")
+        let line = input(smp_prompt(id_label))
         if line == nil or len(str(line)) == 0:
             let skip = true
         else:

@@ -244,6 +244,16 @@ Connecting to 192.168.254.44:42000 ...
 The host/port can also be overridden via the `SMP_HOST` and `SMP_PORT` environment
 variables.
 
+### Interactive Shell Features
+
+The SageSMP shell features a **gradient-styled prompt** using the `rich` library:
+each letter of "SageSMP" renders in a different color (cyan → blue → magenta → red)
+for a rainbow-like effect, followed by a yellow arrow and contextual info:
+
+```
+SageSMP → [relay 192.168.254.44:42000] ❯
+```
+
 ### Running the Universal Interactive Shell
 
 The universal client shell allows you to join the cluster interactively from any machine:
