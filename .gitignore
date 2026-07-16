@@ -14,3 +14,18 @@ __pycache__/
 *.pyc
 dashboard/venv/
 logs/
+
+# SageLink (merged from github.com/Night-Traders-Dev/SageLink)
+# ============================================================
+# SageLink build output and generated runtime artifacts
+sagelink/build/
+sagelink/identity.key
+sagelink/identity.pub
+sagelink/peers.toml
+sagelink/scratch*
+sagelink/print_got.sage
+sagelink/*.txt
+# Precompiled SageLink VM artifacts (only the tracked ones in src/sage are kept)
+src/sage/sagelink/cli/*.svm
+src/sage/sagelink/cli/*.sgvm
+src/sage/sagelink/cli/*.sgrv

@@ -1,6 +1,8 @@
 # SageSMP - Pure Sage Multicore Protocol
 
 A modular, mailbox-based protocol for multicore message passing implemented in pure SageLang.
+It also includes **SageLink** — an E2E-encrypted command/file/shell protocol — which was
+merged into this repository (see the SageLink section below).
 
 ## Overview
 
@@ -57,6 +59,100 @@ src/sage/
     ├── demo.sage          # Runnable demo (compiles to ELF binary)
     └── example.sage       # Usage examples and test suite
 ```
+
+## SageLink (E2E Encrypted Command / File / Shell Protocol)
+
+SageLink — an E2E encrypted protocol suite for running remote commands, transferring
+files, and spawning interactive shells between two known Linux devices over TCP/IP — has
+been **merged into this repository** (previously standalone at
+[github.com/Night-Traders-Dev/SageLink](https://github.com/Night-Traders-Dev/SageLink),
+now deprecated). It is implemented entirely in SageLang with hand-rolled cryptographic
+primitives (Noise_IK handshake, ChaCha20-Poly1305 AEAD, X25519, BLAKE2s, HKDF).
+
+### Location
+
+```
+src/sage/sagelink/                 # SageLink package (import sagelink.*)
+├── handshake/                     # Noise_IK handshake state machine
+├── transport/                     # Wire framing & replay protection
+├── mux/                           # Stream multiplexing (CMD / FILE / SHELL)
+├── app/                           # Application services (cmd, file, shell)
+├── cli/                           # CLI entry point (sagelink.sage)
+├── crypto/                        # Vendored SageLang crypto primitives (import crypto.*)
+├── gc/                            # Vendored sagelang-lib-gc (standalone GC library)
+└── utils.sage                     # Compatibility utilities
+
+sagelink/                          # SageLink tests, docs, benchmarks, version
+├── Testing/                       # Crypto, handshake, and integration tests
+├── docs/                          # SageLink documentation
+├── Benchmarks/                    # fib / crypto benchmarks
+└── VERSION.md                     # SageLink version (currently v0.2.1)
+```
+
+The crypto library is vendored under `src/sage/sagelink/crypto/` so the `import crypto.*`
+statements resolve without clashing with SageSMP's own `src/sage/crypto/`. The SageLink
+package is imported via the `sagelink.*` prefix, matching its original layout.
+
+### Building & Running
+
+SageLink ships its own build orchestrator (`sagemake-link`), which sets the correct
+`SAGE_PATH` (including `src/sage/sagelink` and `src/sage`):
+
+```bash
+# Check environment and run the RFC test-vector suite
+./sagemake-link test
+
+# Syntax check all sources
+./sagemake-link check
+
+# Cross-compile VM binaries for x86_64 / aarch64 / rv64
+./sagemake-link cross-build
+
+# Run the CLI directly (sets SAGE_PATH automatically)
+./sagemake-link run keygen
+./sagemake-link run listen 7420
+./sagemake-link run connect pi4 cmd "uname -a"
+```
+
+Equivalently, with manual `SAGE_PATH`:
+
+```bash
+export SAGE_PATH="$(pwd)/src/sage/sagelink:$(pwd)/src/sage:$(pwd)"
+sage src/sage/sagelink/cli/sagelink.sage keygen
+sage src/sage/sagelink/cli/sagelink.sage listen 7420
+sage src/sage/sagelink/cli/sagelink.sage connect pi4 shell
+```
+
+### Quick Start
+
+```bash
+# 1. Generate an identity keypair
+sage src/sage/sagelink/cli/sagelink.sage keygen
+
+# 2. Configure peers in peers.toml
+cat > peers.toml <<EOF
+[pi4]
+pubkey = "<base64 public key of the remote device>"
+addr = "192.168.1.51:7420"
+EOF
+
+# 3. Listen for incoming connections
+sage src/sage/sagelink/cli/sagelink.sage listen
+
+# 4. Connect and run commands
+sage src/sage/sagelink/cli/sagelink.sage connect pi4 cmd "uname -a"
+sage src/sage/sagelink/cli/sagelink.sage connect pi4 file_send ./local.txt /remote/path.txt
+sage src/sage/sagelink/cli/sagelink.sage connect pi4 shell
+```
+
+### Requirements
+
+- **SageLang**: `v4.0.2` or higher (SageSMP itself requires `v4.0.8+` for AOT).
+- **SageVM**: `v0.9.8` or higher (for VM-based execution).
+- The RFC-gated crypto test suite lives at `sagelink/Testing/test_crypto.sage`.
+
+See `sagelink/docs/` for the full SageLink architecture, handshake, transport,
+multiplexing, services, CLI, and testing documentation.
 
 ## Quick Start
 
