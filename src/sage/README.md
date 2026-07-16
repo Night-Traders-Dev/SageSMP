@@ -218,6 +218,32 @@ The client telemetry scripts can connect to any IP/Port dynamically:
 ./bin/sagesmp pi4 <Relay IP> <Relay Port>
 ```
 
+### Connecting to a Live Server (one-shot)
+
+The standalone binary can verify connectivity to a running SMP relay server with a
+single command — no interactive shell required. It opens a real TCP connection,
+sends a heartbeat frame, prints the server's response, and disconnects:
+
+```bash
+# Connect to the OrangePi relay and report cluster status
+./bin/sagesmp connect 192.168.254.44 42000
+```
+
+Expected output:
+
+```
+=== SMP Connect (Real TCP) ===
+Connecting to 192.168.254.44:42000 ...
+[OK] Connected to SMP server at 192.168.254.44:42000
+  status     : ok
+  node_count : 2
+  server_ts  : 1784160000
+[DONE] Disconnected.
+```
+
+The host/port can also be overridden via the `SMP_HOST` and `SMP_PORT` environment
+variables.
+
 ### Running the Universal Interactive Shell
 
 The universal client shell allows you to join the cluster interactively from any machine:

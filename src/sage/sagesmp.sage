@@ -285,6 +285,79 @@ end
 
 
 # =========================================
+# Connect to an OrangePi-style SMP relay server (real TCP)
+# =========================================
+# Sends a single heartbeat JSON frame and prints the server's response
+# ({"status":"ok","node_count":N,"server_ts":T}). Mirrors the rpi2/rpi4
+# heartbeat so the standalone binary can verify connectivity to a live server.
+
+proc run_connect(mode_idx):
+    let argv = sys.args()
+    if len(argv) < mode_idx + 3:
+        print("Usage: sagesmp connect <host> <port>")
+        return
+    end
+    let host = argv[mode_idx + 1]
+    let port = tonumber(argv[mode_idx + 2])
+    if port == nil or port < 1 or port > 65535:
+        print("Error: port must be 1-65535")
+        return
+    end
+
+    let host_env = sys.getenv("SMP_HOST")
+    if host_env != nil:
+        host = host_env
+    end
+    let port_env = sys.getenv("SMP_PORT")
+    if port_env != nil:
+        port = tonumber(port_env)
+    end
+
+    print("=== SMP Connect (Real TCP) ===")
+    print("Connecting to " + host + ":" + str(port) + " ...")
+
+    let fd = tcp.connect(host, port)
+    if fd == -1:
+        print("[ERROR] Cannot connect to " + host + ":" + str(port))
+        return
+    end
+
+    let msg = {
+        "client_id": 0,
+        "platform": "SageSMP",
+        "info": "standalone connect",
+        "timestamp": clock()
+    }
+    tcp.sendall(fd, json_encode(msg))
+
+    let raw = tcp.recv(fd, 4096)
+    if raw != nil and len(raw) > 0:
+        let resp = json_decode(raw)
+        if resp != nil:
+            print("[OK] Connected to SMP server at " + host + ":" + str(port))
+            if resp["status"] != nil:
+                print("  status     : " + str(resp["status"]))
+            end
+            if resp["node_count"] != nil:
+                print("  node_count : " + str(resp["node_count"]))
+            end
+            if resp["server_ts"] != nil:
+                print("  server_ts  : " + str(resp["server_ts"]))
+            end
+        else:
+            print("[WARN] Bad JSON response: " + raw)
+        end
+    else:
+        print("[WARN] No response from " + host + ":" + str(port))
+    end
+
+    # Shift TIME_WAIT to us: server waits for client to close first.
+    tcp.close(fd)
+    print("[DONE] Disconnected.")
+end
+
+
+# =========================================
 # src/sage/client/rpi2_client.sage
 # =========================================
 
@@ -2109,7 +2182,8 @@ proc main():
     end
     
     if mode_idx == -1:
-        print("Usage: sagesmp <relay|pi2|pi4|shell> [args...]")
+        print("Usage: sagesmp <relay|pi2|pi4|shell|connect> [args...]")
+        print("  sagesmp connect <host> <port>   Connect to an SMP relay server")
         return
     end
     
@@ -2121,6 +2195,8 @@ proc main():
         run_rpi2(mode_idx)
     elif mode == "pi4":
         run_rpi4(mode_idx)
+    elif mode == "connect":
+        run_connect(mode_idx)
     elif mode == "shell":
         parse_args(mode_idx)
         if _start_as_router:
