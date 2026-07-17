@@ -1545,10 +1545,12 @@ proc cmd_connect(host, port):
     end
 
     let hb = {
-        "client_id": 0,
+        "client_id": 100,
         "platform": "SageSMP",
         "info": "interactive client",
-        "timestamp": clock()
+        "timestamp": clock(),
+        "services": nil,
+        "compile": nil
     }
     tcp.sendall(fd, json_encode(hb))
     let raw = tcp.recv(fd, 4096)
@@ -1566,7 +1568,7 @@ proc cmd_connect(host, port):
     session["router_host"] = host
     session["router_port"] = port
     session["connected"]   = true
-    session["my_id"]       = node_count + 1
+    session["my_id"]       = 100
     session["live_fd"]     = 0
     print("[SMP] Connected to relay at " + host + ":" + str(port) +
           "  (cluster node_count=" + str(node_count) + ")")

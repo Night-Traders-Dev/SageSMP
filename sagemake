@@ -119,9 +119,16 @@ def build_smp(target=None, all_targets=False, relay=False, client=False, demo=Fa
     for src, out in targets:
         banner(f"Building {src}.sage")
         if "sagesmp" in src:
-            # Create a launcher script instead of buggy compiled ELF
+            # Create a launcher script instead of buggy compiled ELF.
+            # Resolve the source path relative to the repo root so the
+            # launcher works no matter what the current directory is.
+            repo_root = os.path.dirname(os.path.abspath(__file__))
+            # `src` may be "src/sage/sagesmp" (via --sagesmp) or just
+            # "sagesmp" (via the positional target). Normalise both.
+            sage_rel = src if "/" in src else os.path.join("src", "sage", src)
+            sage_src = os.path.join(repo_root, sage_rel + ".sage")
             with open(out, "w") as f_out:
-                f_out.write("#!/bin/sh\nexec sage --jit " + src + ".sage \"$@\"\n")
+                f_out.write("#!/bin/sh\nexec sage --jit \"" + sage_src + "\" \"$@\"\n")
             os.chmod(out, 0o755)
             res = type('obj', (object,), {'returncode': 0})()
         else:
