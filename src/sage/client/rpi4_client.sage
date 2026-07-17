@@ -7,6 +7,10 @@ import io
 
 let argv = sys.args()
 let ORANGEPI_HOST = "192.168.254.44"
+let env_host = sys.getenv("SMP_HOST")
+if env_host != nil:
+    ORANGEPI_HOST = env_host
+end
 if len(argv) >= 3:
     ORANGEPI_HOST = argv[2]
 end
